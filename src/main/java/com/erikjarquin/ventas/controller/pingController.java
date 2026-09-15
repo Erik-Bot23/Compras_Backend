@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
  * liveness o vendría siendo un "¿está viva la app?" sin necesidad de JWT.
  */
 @RestController
-public class pingController {
+public class PingController {
 
     /**
      * Devuelve una respuesta mínima 200 OK. Descripción: revisar el estado.

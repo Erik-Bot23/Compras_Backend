@@ -1,9 +1,18 @@
 package com.erikjarquin.ventas.model.enums;
 
 /**
- * Catálogo de permisos (38). Cada nombre se usa en entidades PermissionEntity
+ * Catálogo de permisos (34). Cada nombre se usa en entidades PermissionEntity
  * (columna name) y en los @PreAuthorize("hasAuthority('...')") de los
  * controllers: el string debe coincidir EXACTAMENTE con el nombre del enum.
+ *
+ * <p>Organizados por módulo. Al agregar/quitar un valor:
+ *  1. PermissionBootstrap lo crea en BD en el siguiente arranque.
+ *  2. RolePermissionBootstrap (self-healing) reasigna los permisos de cada rol.
+ *  3. Verificar que el frontend tenga la ruta/guard correspondiente si es nuevo.
+ *
+ * <p>NOTA: VER_CLIENTES y VER_FACTURAS no tienen endpoints en el backend aún,
+ * pero el frontend los usa como guard de rutas para /clientes y /facturas
+ * (módulos placeholder planificados).
  */
 public enum PermissionName {
     //Compras (módulo completo: ver, registrar y cancelar compras)
@@ -23,7 +32,7 @@ public enum PermissionName {
     EDITAR_PRODUCTOS,
     ELIMINAR_PRODUCTOS,
 
-    //Clientes
+    //Clientes (usado por frontend guard en /clientes — módulo pendiente)
     VER_CLIENTES,
 
     //Usuarios
@@ -42,7 +51,6 @@ public enum PermissionName {
     //Ventas
     VER_VENTAS,
     CREAR_VENTAS,
-    CANCELAR_VENTAS,
 
     //Caja
     VER_CAJA,
@@ -58,14 +66,9 @@ public enum PermissionName {
 
     //Reportes
     VER_REPORTES,
-    EXPORTAR_REPORTES,
 
-    //Facturas
+    //Facturas (usado por frontend guard en /facturas — módulo pendiente)
     VER_FACTURAS,
-
-    //Configuración
-    VER_CONFIGURACION,
-    EDITAR_CONFIGURACION,
 
     //Pagos
     PROCESAR_PAGOS

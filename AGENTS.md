@@ -17,8 +17,8 @@
 
 Capas: `controller/ → service/ (interfaz) → service/impl/ → repository/ → model/entity/`. DTOs en `model/dto/`, Mappers en `mapper/` (algunos estáticos, otros `@Component`), config en `config/`, excepciones en `exceptions/`.
 
-- **13 controllers, 64 endpoints** (`/api/...`)
-- Autorización por permiso vía `@PreAuthorize("hasAuthority('...')")` (**38 permisos** en `PermissionName`)
+- **13 controllers, 54 endpoints** (`/api/...`)
+- Autorización por permiso vía `@PreAuthorize("hasAuthority('...')")` (**34 permisos** en `PermissionName`)
 - 4 `CommandLineRunner` de bootstrap (orden): `RoleBootstrap` → `AdminBootstrap` → `PermissionBootstrap` → `RolePermissionBootstrap`
 - Admin inicial: `18jarquinsanchezerik1a@gmail.com` / `1234`
 
@@ -51,6 +51,41 @@ Capas: `controller/ → service/ (interfaz) → service/impl/ → repository/ �
 
 ## Registro de cambios / decisiones
 
+### 2026-09-15 — Corrección FK en borrados + bloqueo productos con histórico
+
+1. **Productos con histórico no se borran**: `ProductImpl.delete` verificaba
+   `deleteById` sin comprobar referencias → al borrar un producto con ventas o
+   compras, PostgreSQL lanzaba FK violation y el frontend recibía 500. Ahora se
+   consulta `ProductRepository.existsBySaleDetailsProductId` / `exists...Purchase...`
+   (JPQL sobre `SaleDetailEntity`/`PurchaseDetailEntity` con `product.id = :id`).
+   Si existe histórico → `ProductException` **409** con mensaje claro. Nueva
+   `exceptions/ProductException.java` + handler `PRODUCT_ERROR` en
+   `GlobalExceptionHandler`. (El borrado físico solo aplica a productos NUNCA
+   vendidos/comparados; el stock como 0 o edición son las alternativas.)
+2. **Categorías y roles: fin de la dependencia de lazy-loading**: `delete` de
+   `CategoryImpl`/`RoleImpl` tocaban colecciones lazy (`getProducts()`/`getUsers()`)
+   fuera de transacción (dependía de `open-in-view` para no reventar). Ahora usan
+   conteos SQL: `ProductRepository.countByCategory_Id` y
+   `UserRepository.countByRole_Id` — mismo resultado 409, sin sorpresas.
+3. **Usuarios**: no aplica (nunca se borran físicamente, solo `active=false`).
+4. **Imágenes huérfanas → 404, no 500**: el bug original borraba la imagen de disco
+   antes de fallar el DELETE, dejando productos con `img` apuntando a un archivo
+   inexistente → el navegador pedía `/api/uploads/x.jpg` y Spring lanzaba
+   `NoResourceFoundException` → 500. Ahora `GlobalExceptionHandler` la mapea a
+   404 silencioso.
+5. **Stock 0 permitido**: el formulario de productos tenía `min="1"` en stock y
+   `validateNumber` forzaba ≥1; se cambió a min 0 (el precio sigue ≥1). Nota: el
+   borrado NO depende del stock — un producto con ventas/compras no se borra
+   (409) aunque tenga stock 0.
+6. `mvn compile`, `ng build` y **35 tests en verde** verificado.
+
+### 2026-sesión — Limpieza final + configuración local + comentarios
+1. **`application-local.yaml` CREADO** en `src/main/resources/` (gitignored). Sin él la app NO arranca en local (los `${VAR}` sin default fallan rápido). Contiene: `DB_USER/PASSWORD`, `MAIL_USERNAME/PASSWORD`, `JWT_SECRET` (generado, ≥32 bytes), `ADMIN_EMAIL/PASSWORD`, `PAYMENT_MERCHANT_ID/TERMINAL_ID/KEYSTORE_PASSWORD`, `CORS_ALLOWED_ORIGINS`. ⚠️ Si agregas un `${VAR}` nuevo a `application.yaml`, agrégalo también aquí.
+2. **Asimetría CAJERO corregida**: `RolePermissionBootstrap` ahora da `VER_CAJA` al rol CAJERO. Antes podía abrir/cerrar caja pero `GET /api/cash/active` le daba 403 al cargar el POS.
+3. **4 permisos huérfanos eliminados** del enum `PermissionName` (38 → **34**): `CANCELAR_VENTAS`, `EXPORTAR_REPORTES`, `VER_CONFIGURACION`, `EDITAR_CONFIGURACION` (ningún endpoint ni guard del frontend los usaba). Se conservaron `VER_CLIENTES` y `VER_FACTURAS`: el frontend los usa como guard de rutas `/clientes` y `/facturas` (módulos pendientes). Referencia en javadoc de `ReportController` actualizada.
+4. **Comentarios didácticos añadidos** en componentes clave (ver abajo).
+5. `mvn compile` verificado OK.
+
 ### 2026-09-13 (2) — Módulo de Compras completo (backend + frontend)
 
 **Backend**
@@ -79,10 +114,11 @@ Capas: `controller/ → service/ (interfaz) → service/impl/ → repository/ �
 ## Pendientes / issues conocidos
 
 - ⚠️ **Secretos en historial de git**: purgar con `git filter-repo` antes de publicar el repo.
-- **Imágenes**: sin validación de tipo/contenido del archivo; sin perfil dev/prod (`application.yaml` único).
-- **Tests**: repos + file storage cubiertos (35); falta cobertura de controllers con Mockito/WebMvc.
+- **Imágenes**: sin perfil dev/prod separado en el frontend para `environment-prod.ts` (requiere definir la API de Railway al desplegar).
+- **Tests**: 35 en verde (repos + servicios + file storage); falta cobertura de controllers con Mockito/WebMvc.
 - Frontend: componentes `Ventas`, `Clientes`, `Facturas` son placeholders; `Caja` también (su "hoja de corte" vive hoy en Reportes). `reversePayment` del backend no tiene UI (requiere un listado/detalle de pagos).
-- Trabajo sin commitear (todo el historial reciente).
+- ⚠️ **BD local**: el CHECK `permissions_name_check` (generado por Hibernate para `@Enumerated`) NO se actualiza con `ddl-auto:update`. Al agregar permisos al enum el arranque puede fallar con "viola la restricción check" → droppear el constraint en BD local (`ALTER TABLE permissions DROP CONSTRAINT permissions_name_check`) o usar BD nueva.
+- **Código pendiente**: `pingController` → renombrado a `PingController` (Hecho), `//` suelto en `CashRegisterController` (Hecho); falta cambiar `System.out.println` de los bootstraps por un logger. Está todo commiteado (git clean).
 
 ## Cómo ejecutar
 

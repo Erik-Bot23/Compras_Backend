@@ -40,4 +40,15 @@ public interface ProductRepository extends JpaRepository<ProductEntity, Long> {
         ORDER BY p.stock ASC
     """)
     List<ProductEntity> findLowStock(@Param("threshold") int threshold);
+
+    //¿El producto se ha vendido alguna vez? (para bloquear su borrado con 409)
+    @Query("SELECT COUNT(d) > 0 FROM SaleDetailEntity d WHERE d.product.id = :productId")
+    boolean existsBySaleDetailsProductId(@Param("productId") Long productId);
+
+    //¿El producto se ha comprado alguna vez? (para bloquear su borrado con 409)
+    @Query("SELECT COUNT(d) > 0 FROM PurchaseDetailEntity d WHERE d.product.id = :productId")
+    boolean existsByPurchaseDetailsProductId(@Param("productId") Long productId);
+
+    //¿Cuántos productos tiene una categoría? (para bloquear su borrado con 409)
+    long countByCategory_Id(Long categoryId);
 }

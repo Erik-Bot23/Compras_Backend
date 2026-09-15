@@ -4,9 +4,11 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.erikjarquin.ventas.exceptions.ProductException;
 import com.erikjarquin.ventas.mapper.ProductMapper;
 import com.erikjarquin.ventas.model.dto.Products.ProductDto;
 import com.erikjarquin.ventas.model.entity.CategoryEntity;
@@ -118,7 +120,14 @@ public class ProductImpl implements ProductService {
     //Borrar producto
     @Override
     public void delete(Long id){
-        ProductEntity entity = repository.findById(id).orElseThrow(() -> new IllegalArgumentException("Producto no encontrado"));
+        ProductEntity entity = repository.findById(id).orElseThrow(() -> new ProductException("Producto no encontrado"));
+
+        //No se puede borrar un producto con histórico de ventas o compras:
+        //la venta/compra lo referencia por FK y perderíamos el dato histórico.
+        if(repository.existsBySaleDetailsProductId(id) || repository.existsByPurchaseDetailsProductId(id)){
+            throw new ProductException("No se puede eliminar el producto: tiene ventas o compras asociadas. Puedes editar su stock en 0 o dejar de usarlo en el punto de venta", HttpStatus.CONFLICT);
+        }
+
         fileStorageService.delete(entity.getImg());
         repository.deleteById(id);
     }

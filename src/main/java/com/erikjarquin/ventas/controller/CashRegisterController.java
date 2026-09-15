@@ -29,7 +29,7 @@ public class CashRegisterController {
     }
 
     //Ver resumen de las ventas
-    @PreAuthorize("hasAuthority('CORTE_CAJA')")//
+    @PreAuthorize("hasAuthority('CORTE_CAJA')")
     @GetMapping("/summary")
     public CashSummaryResponse getSummary(){
         return service.getSummary();

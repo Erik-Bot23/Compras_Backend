@@ -18,6 +18,7 @@ import com.erikjarquin.ventas.model.enums.PermissionName;
 import com.erikjarquin.ventas.repository.PermissionRepository;
 import com.erikjarquin.ventas.exceptions.RoleException;
 import com.erikjarquin.ventas.repository.RoleRepository;
+import com.erikjarquin.ventas.repository.UserRepository;
 import com.erikjarquin.ventas.service.RoleService;
 
 /**
@@ -29,10 +30,12 @@ import com.erikjarquin.ventas.service.RoleService;
 public class RoleImpl implements RoleService {
     private final RoleRepository repository;
     private final PermissionRepository permissionRepository;
+    private final UserRepository userRepository;
 
-    public RoleImpl(RoleRepository repository, PermissionRepository permissionRepository){
+    public RoleImpl(RoleRepository repository, PermissionRepository permissionRepository, UserRepository userRepository){
         this.repository=repository;
         this.permissionRepository=permissionRepository;
+        this.userRepository=userRepository;
     }
 
     //Mostrar todos los roles
@@ -94,10 +97,12 @@ public class RoleImpl implements RoleService {
     //Eliminar role
     @Override
     public void deleteRole(Long id){
-        RoleEntity role = repository.findById(id).orElseThrow(() -> 
+        repository.findById(id).orElseThrow(() -> 
         new RoleException("Rol no encontrado"));
 
-        if(role.getUsers() != null && !role.getUsers().isEmpty()){
+        //Conteo SQL en vez de la colección lazy users (evita depender de
+        //open-in-view y errores de LazyInitialization fuera de transacción).
+        if(userRepository.countByRole_Id(id) > 0){
             throw new RoleException("No puedes eliminar un rol con usuarios asignados", HttpStatus.CONFLICT);
         }
         repository.deleteById(id);

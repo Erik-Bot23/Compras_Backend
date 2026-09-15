@@ -11,6 +11,7 @@ import com.erikjarquin.ventas.mapper.CategoryMapper;
 import com.erikjarquin.ventas.model.dto.Categories.CategoryDto;
 import com.erikjarquin.ventas.model.entity.CategoryEntity;
 import com.erikjarquin.ventas.repository.CategoryRepository;
+import com.erikjarquin.ventas.repository.ProductRepository;
 import com.erikjarquin.ventas.service.CategoryService;
 
 /**
@@ -21,9 +22,11 @@ import com.erikjarquin.ventas.service.CategoryService;
 @Service
 public class CategoryImpl implements CategoryService {
     private final CategoryRepository repository;
+    private final ProductRepository productRepository;
 
-    public CategoryImpl(CategoryRepository repository){
+    public CategoryImpl(CategoryRepository repository, ProductRepository productRepository){
         this.repository=repository;
+        this.productRepository=productRepository;
     }
 
     //Mostrar todas las categorías
@@ -73,10 +76,12 @@ public class CategoryImpl implements CategoryService {
     //Borrar la categoría
     @Override
     public void delete(Long id){
-        CategoryEntity category = repository.findById(id).orElseThrow(() ->
+        repository.findById(id).orElseThrow(() ->
             new CategoryException("Categoría no encontrada"));
 
-        if(category.getProducts() != null && !category.getProducts().isEmpty()){
+        //Conteo SQL en vez de la colección lazy products (evita depender de
+        //open-in-view y errores de LazyInitialization fuera de transacción).
+        if(productRepository.countByCategory_Id(id) > 0){
             throw new CategoryException("No puedes eliminar una categoría con productos", HttpStatus.CONFLICT);
         }
 

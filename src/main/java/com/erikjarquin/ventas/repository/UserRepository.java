@@ -32,4 +32,7 @@ public interface UserRepository extends JpaRepository<UserEntity, Long> {
     
     //Resetear el token
     Optional<UserEntity> findByResetToken(String resetToken);
+
+    //¿Cuántos usuarios tiene un rol? (para bloquear su borrado con 409)
+    long countByRole_Id(Long roleId);
 }

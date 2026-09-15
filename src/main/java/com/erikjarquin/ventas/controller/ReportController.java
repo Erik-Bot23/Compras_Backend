@@ -21,8 +21,7 @@ import com.erikjarquin.ventas.service.ReportsService;
 
 /**
  * Reportes (dashboard analítico). Todos los endpoints exigen el permiso
- * VER_REPORTES (la exportación se hace del lado cliente; EXPORTAR_REPORTES
- * queda reservado para una futura defensa server-side).
+ * VER_REPORTES (la exportación PDF/Excel se hace del lado del cliente).
  *
  * <p>Todas las consultas aceptan {@code from}/{@code to} (ISO yyyy-MM-dd,
  * opcionales) y agregan en SQL.

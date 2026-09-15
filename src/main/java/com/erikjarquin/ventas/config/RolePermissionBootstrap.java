@@ -57,6 +57,11 @@ public class RolePermissionBootstrap implements CommandLineRunner {
                 PermissionName.VER_PRODUCTOS,
                 PermissionName.VER_VENTAS,
                 PermissionName.CREAR_VENTAS,
+                //VER_CAJA es necesario para que el cajero pueda consultar si
+                //hay caja abierta en el POS (GET /api/cash/active). Sin él,
+                //aunque puede ABRIR/CERRAR caja, no puede leer su estado y el
+                //frontend recibe 403 al cargar la pantalla de cobro.
+                PermissionName.VER_CAJA,
                 PermissionName.ABRIR_CAJA,
                 PermissionName.CERRAR_CAJA
             )

@@ -12,6 +12,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -71,6 +72,16 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleCategoryException(CategoryException ex) {
         log.warn("Error de categoría: {}", ex.getMessage());
         return buildErrorResponse(ex.getStatus(), "CATEGORY_ERROR", ex.getMessage());
+    }
+
+    /**
+     * Productos: errores de negocio del módulo de productos (no encontrado,
+     * producto con ventas/compras asociadas que impide borrarlo).
+     */
+    @ExceptionHandler(ProductException.class)
+    public ResponseEntity<ErrorResponse> handleProductException(ProductException ex) {
+        log.warn("Error de producto: {}", ex.getMessage());
+        return buildErrorResponse(ex.getStatus(), "PRODUCT_ERROR", ex.getMessage());
     }
 
     /**
@@ -184,6 +195,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponse> handleUnreadable(HttpMessageNotReadableException ex) {
         return buildErrorResponse(HttpStatus.BAD_REQUEST, "BAD_REQUEST", "Cuerpo de la petición inválido");
+    }
+
+    /**
+     * Recurso estático inexistente (p. ej. una imagen de producto cuyo archivo
+     * ya no está en uploads/) → 404, NO 500. Evita que el frontend reciba un
+     * "Error interno" cuando el navegador pide una imagen huérfana.
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNoResource(NoResourceFoundException ex) {
+        return buildErrorResponse(HttpStatus.NOT_FOUND, "NOT_FOUND", "El recurso solicitado no existe");
     }
 
     /**
