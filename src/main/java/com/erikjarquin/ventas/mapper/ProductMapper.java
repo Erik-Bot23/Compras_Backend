@@ -7,6 +7,13 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+/**
+ * Mapper producto → ProductDto (componente de Spring).
+ *
+ * <p>buildImgUrl antepone {@code app.upload-url} al nombre guardado en BD para
+ * devolver una URL COMPLETA consumible por <img [src]> en el frontend Angular.
+ * Si no hay imagen o no hay URL configurada, devuelve el valor tal cual.
+ */
 @Component
 public class ProductMapper {
 
@@ -23,6 +30,7 @@ public class ProductMapper {
         dto.setId(entity.getId());
         dto.setName(entity.getName());
         dto.setPrice(entity.getPrice());
+        dto.setCost(entity.getCost());
         dto.setStock(entity.getStock());
         dto.setImg(buildImgUrl(entity.getImg()));
 

@@ -1,5 +1,13 @@
 package com.erikjarquin.ventas.model.enums;
 
+/**
+ * Ciclo de vida de un pago con tarjeta:
+ *
+ * <p>PENDING (creado) → PROCESSING (enviado a la terminal) → APPROVED o
+ * REJECTED. Un APPROVED puede ir a REVERSAL_PENDING → REVERSED, o
+ * REVERSAL_FAILED si la reversa no pudo completarse. El monitor (job) marca
+ * REJECTED los PENDING que nunca resolvieron en el tiempo límite.
+ */
 public enum PaymentStatus {
     PENDING("Pendiente"),
     PROCESSING("Procesando"), //Enviado a terminal

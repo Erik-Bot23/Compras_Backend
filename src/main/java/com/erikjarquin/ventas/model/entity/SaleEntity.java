@@ -20,6 +20,14 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 
+/**
+ * Entidad {@code sales}: cabecera de una venta.
+ *
+ * <p>Relaciones: 1:N a SaleDetailEntity (productos vendidos, cascade ALL +
+ * orphanRemoval), N:1 a CashRegisterEntity (caja donde se registró) y 1:1 a
+ * PaymentEntity (solo si fue pagada con tarjeta). paymentStatus recorre:
+ * PENDING → APPROVED | REJECTED | REVERSED.
+ */
 @Entity
 @Table(name = "sales")
 public class SaleEntity {

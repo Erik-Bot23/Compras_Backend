@@ -6,7 +6,6 @@ import java.util.List;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -20,9 +19,17 @@ import org.springframework.web.multipart.MultipartFile;
 import com.erikjarquin.ventas.model.dto.Products.ProductDto;
 import com.erikjarquin.ventas.service.ProductService;
 
+/**
+ * CRUD de productos (multipart para la imagen) y búsquedas.
+ *
+ * <p>Permisos requeridos: VER_PRODUCTOS (listar/buscar), CREAR_PRODUCTOS,
+ * EDITAR_PRODUCTOS, ELIMINAR_PRODUCTOS.
+ *
+ * <p>Nota CORS: el origen permitido se define globalmente en SecurityConfig
+ * (propiedad ${CORS_ALLOWED_ORIGINS}); por eso aquí ya NO hay @CrossOrigin.
+ */
 @RestController
 @RequestMapping("/api/products")
-@CrossOrigin(origins = "http://localhost:4200")
 public class ProductController {
     private final ProductService service;
 

@@ -16,6 +16,16 @@ import com.erikjarquin.ventas.repository.ProductRepository;
 import com.erikjarquin.ventas.service.FileStorageService;
 import com.erikjarquin.ventas.service.ProductService;
 
+/**
+ * Implementación del catálogo de productos.
+ *
+ * <p>La imagen se guarda con FileStorageService (que valida tamaño/extensión/
+ * contenido y devuelve el nombre UUID). El mapper construye la URL completa:
+ * {@code app.upload-url}/{archivo} para que el frontend la use en <img>.
+ *
+ * <p>Los errores de "no encontrado" o categoría inválida se lanzan como
+ * IllegalArgumentException → el GlobalExceptionHandler responde 400 (no 500).
+ */
 @Service
 public class ProductImpl implements ProductService {
     private final ProductRepository repository;
@@ -60,7 +70,7 @@ public class ProductImpl implements ProductService {
         entity.setStock(stock);
 
         CategoryEntity category = categoryRepository.findById(categoryId).orElseThrow(() -> 
-                        new RuntimeException("Categoria no encontrada"));
+                        new IllegalArgumentException("Categoria no encontrada"));
                                         
         entity.setCategory(category);
         entity.setSku(sku);
@@ -85,12 +95,12 @@ public class ProductImpl implements ProductService {
         String barcode,
         MultipartFile image
     ){
-        ProductEntity entity = repository.findById(id).orElseThrow(() -> new RuntimeException("Producto no encontrado"));
+        ProductEntity entity = repository.findById(id).orElseThrow(() -> new IllegalArgumentException("Producto no encontrado"));
         entity.setName(name);
         entity.setPrice(price);
         entity.setStock(stock);
 
-        CategoryEntity category = categoryRepository.findById(categoryId).orElseThrow(() -> new RuntimeException("Categoría no encontrada"));
+        CategoryEntity category = categoryRepository.findById(categoryId).orElseThrow(() -> new IllegalArgumentException("Categoría no encontrada"));
         entity.setCategory(category);
         entity.setSku(sku);
         entity.setBarcode(barcode);
@@ -108,7 +118,7 @@ public class ProductImpl implements ProductService {
     //Borrar producto
     @Override
     public void delete(Long id){
-        ProductEntity entity = repository.findById(id).orElseThrow(() -> new RuntimeException("Producto no encontrado"));
+        ProductEntity entity = repository.findById(id).orElseThrow(() -> new IllegalArgumentException("Producto no encontrado"));
         fileStorageService.delete(entity.getImg());
         repository.deleteById(id);
     }
@@ -117,7 +127,7 @@ public class ProductImpl implements ProductService {
     @Override
     public ProductDto findByBarcode(String barcode){
         ProductEntity product = repository.findByBarcode(barcode).orElseThrow(() ->
-            new RuntimeException("Producto no encontrado"));
+            new IllegalArgumentException("Producto no encontrado"));
 
         return productMapper.toDto(product);
     }

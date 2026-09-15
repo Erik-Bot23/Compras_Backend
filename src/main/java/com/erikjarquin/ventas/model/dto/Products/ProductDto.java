@@ -7,6 +7,7 @@ public class ProductDto {
     private Long id;
     private String name;
     private BigDecimal price;
+    private BigDecimal cost;
     private int stock;
     private Long categoryId;
     private String categoryName;
@@ -51,6 +52,15 @@ public class ProductDto {
 
     public void setStock(int stock){
         this.stock=stock;
+    }
+
+    //getters y setters de cost
+    public BigDecimal getCost(){
+        return cost;
+    }
+
+    public void setCost(BigDecimal cost){
+        this.cost=cost;
     }
 
     //getters y setters de categoria

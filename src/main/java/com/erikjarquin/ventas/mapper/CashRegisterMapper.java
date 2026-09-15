@@ -5,6 +5,11 @@ import org.springframework.stereotype.Component;
 import com.erikjarquin.ventas.model.dto.Cash.CashResponse;
 import com.erikjarquin.ventas.model.entity.CashRegisterEntity;
 
+/**
+ * Mapper caja → CashResponse (componente de Spring, inyectado por
+ * CashRegisterImpl). closingAmount es el dinero CONTADO por el cajero
+ * (countedAmount), distinto del esperado según sistema.
+ */
 @Component
 public class CashRegisterMapper {
     public CashResponse toResponse(CashRegisterEntity cash){

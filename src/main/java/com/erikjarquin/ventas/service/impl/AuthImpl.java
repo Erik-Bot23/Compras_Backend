@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -19,7 +20,16 @@ import com.erikjarquin.ventas.repository.UserRepository;
 import com.erikjarquin.ventas.service.AuthService;
 import com.erikjarquin.ventas.service.EmailService;
 
-@Service //
+/**
+ * Implementación del módulo de AUTH:
+ *  - login: valida credenciales (usuarios activos), devuelve el JWT junto con
+ *    el rol y los permisos. Falla "en silencio" (LoginResponse con success=false)
+ *    para no revelar si el correo existe o no (evita enumeración de usuarios).
+ *  - forgot/reset-password: token UUID con 1 hora de validez; el enlace apunta
+ *    a ${app.frontend-url} (local: localhost:4200, prod: Dominio Netlify).
+ *  - change-password: exige la contraseña actual antes de cambiarla.
+ */
+@Service
 public class AuthImpl implements AuthService {
     private final UserRepository repo;
     private final PasswordEncoder passwordEncoder;
@@ -100,11 +110,11 @@ public class AuthImpl implements AuthService {
     @Override
     public void resetPassword(String token, String newPassword){
         UserEntity user = repo.findByResetToken(token).orElseThrow(() ->
-            new RuntimeException("Token inválido"));
+            new UserException("Token inválido", HttpStatus.BAD_REQUEST));
 
         //isBefore
         if(user.getResetTokenExpiration().isBefore(LocalDateTime.now())){
-            throw new RuntimeException("Token expirado");
+            throw new UserException("Token expirado", HttpStatus.BAD_REQUEST);
         }
 
         user.setPassword(passwordEncoder.encode(newPassword));
@@ -120,7 +130,7 @@ public class AuthImpl implements AuthService {
         UserEntity user = repo.findByEmail(email).orElseThrow();
 
         if(!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())){
-            throw new RuntimeException("Contraseña actual incorrecta");
+            throw new UserException("Contraseña actual incorrecta", HttpStatus.BAD_REQUEST);
         }
 
         //encode

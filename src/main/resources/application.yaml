@@ -1,11 +1,42 @@
+# ============================================================================
+#  Configuración de Ventas-Backend
+# ----------------------------------------------------------------------------
+#  REGLA DE ORO PARA GIT:
+#   Este archivo SÍ se sube al repositorio, pero DEBE permanecer SIN secretos.
+#   Todos los valores sensibles se inyectan por VARIABLES DE ENTORNO (${...})
+#   o desde application-local.yaml (libro: ignorado por git, ver .gitignore).
+#
+#  ¿DÓNDE VIVEN LOS VALORES DE ${DB_USER} / ${DB_PASSWORD} / etc.?
+#   - EN LOCAL (dev)        : dentro de src/main/resources/application-local.yaml
+#                             (archivo NO versionado, solo en tu máquina).
+#   - EN PRODUCCIÓN (Railway): en las "Variables" de entorno del servicio
+#                             (interfaz web de Railway o el archivo .env).
+#
+#  ORDEN DE PRECEDENCIA QUE USA SPRING PARA RESOLVER ${...} (mayor gana):
+#    1. Variables de entorno del sistema / de Railway
+#    2. application-local.yaml (perfil "local" activo por defecto)
+#    3. application.yaml (este archivo, valores por defecto tipo «:» )
+#
+#  Si una variable no tiene «:default» y tampoco se resuelve, la app NO arranca
+#  (falla rápido). Eso es intencional: evita corre con valores vacíos.
+# ============================================================================
 spring:
   application:
     name: ventas
 
+  # Perfil activo por defecto: "local". Así, al arrancar en tu máquina se carga
+  # application-local.yaml (que contiene tus credenciales reales de dev).
+  # En Railway ese archivo NO existe, así que las variables se toman desde el
+  # entorno de Railway directamente.
+  profiles:
+    default: local
+
   datasource:
-    url: jdbc:postgresql://localhost:5432/ventas_db
-    username: postgres
-    password: admin
+    # Host, puerto y nombre de BD NO son secretos → tienen default. Usuario y
+    # clave vienen de ${DB_USER} / ${DB_PASSWORD} (local o Railway).
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:ventas_db}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
   servlet:
@@ -15,44 +46,63 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: update
-    show-sql: true
+      # update (dev): crea/actualiza tablas automáticamente. Para producción real
+      # usar "validate" → Hibernate NO modifica el esquema, solo lo valida.
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    # false en producción (evita exponer SQL con datos en logs).
+    # true por defecto para tu desarrollo local.
+    show-sql: ${SHOW_SQL:true}
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
-  
+
   mail:
-    host: smtp.gmail.com
-    port: 587
-    username: soportetiav@gmail.com
-    password: tucn dfbu qspk zzki
+    # SMTP de Gmail con credenciales desde variable/env (nunca hardcodeadas).
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
     properties:
       mail:
         smtp:
           auth: true
           starttls:
             enable: true
-  
+
 app:
-  frontend-url: http://localhost:4200
-  upload-dir: ./uploads
-  upload-url: http://localhost:8081/api/uploads
+  # URL del frontend (Angular). Se usa en los emails de recuperación de contraseña.
+  #   Local      : http://localhost:4200
+  #   Netlify    : https://tu-app.netlify.app   → via FRONTEND_URL
+  frontend-url: ${FRONTEND_URL:http://localhost:4200}
+  # Carpeta física donde se guardan las imágenes de productos.
+  #   Local   : ./uploads (default)
+  #   Railway : via UPLOAD_DIR apuntando al VOLUMEN persistente montado, p. ej.
+  #             /app/uploads → navega a Railway → Project → el servicio →
+  #             Volumes tab → crea un volumen con monte en /app/uploads, y
+  #             define UPLOAD_DIR=/app/uploads e UPLOAD_URL=https://<tu-app>.
+  upload-dir: ${UPLOAD_DIR:./uploads}
+  # URL BASE pública con la que el frontend construye las rutas de imágenes:
+  #   Local   : http://localhost:8081/api/uploads
+  #   Railway : https://tu-backend.up.railway.app/api/uploads  → via UPLOAD_URL
+  upload-url: ${UPLOAD_URL:http://localhost:8081/api/uploads}
 
 server:
-  port: 8081
+  # Railway inyecta un puerto aleatorio en $PORT. En local usa el 8081.
+  port: ${PORT:8081}
 
 payment:
- terminal:
-   type: SIMULATED # O PHYSICAL
-   host: 192.168.1.100
-   port: 8080
-   merchant-id: "MERCHANT12345"
-   terminal-id: "TERMINAL001"
-   timeout: 30
-   ssl-enabled: true
-   keystore-path: /certs/terminal.jks
-   keystore-password: changeit
-   simulation:
-    mode: DETERMINISTIC #DETERMINISTIC | RANDOM
-    failure-rate: 0.10 #10% de fallos aleatorios
-    response-delay: 500 #Delay base en ms
+  terminal:
+    # SIMULATED (dev/demo) o PHYSICAL (Socket TCP con terminal real).
+    type: ${PAYMENT_TERMINAL_TYPE:SIMULATED}
+    host: ${TERMINAL_HOST:192.168.1.100}
+    port: ${TERMINAL_PORT:8080}
+    merchant-id: ${PAYMENT_MERCHANT_ID}
+    terminal-id: ${PAYMENT_TERMINAL_ID}
+    timeout: ${TERMINAL_TIMEOUT:30}
+    ssl-enabled: ${TERMINAL_SSL_ENABLED:true}
+    keystore-path: ${TERMINAL_KEYSTORE_PATH:/certs/terminal.jks}
+    keystore-password: ${PAYMENT_KEYSTORE_PASSWORD}
+    simulation:
+      mode: ${TERMINAL_SIMULATION_MODE:DETERMINISTIC}
+      failure-rate: ${TERMINAL_FAILURE_RATE:0.10}
+      response-delay: ${TERMINAL_RESPONSE_DELAY:500}

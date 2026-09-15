@@ -10,6 +10,13 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
+/**
+ * Entidad {@code sale_details}: renglón de venta (un producto vendido).
+ *
+ * <p>Guarda una copia del precio unitario en el momento de la venta (unitPrice)
+ * para que cambios futuros de precio no alteren el histórico. subtotal =
+ * unitPrice * quantity.
+ */
 @Entity
 @Table(name = "sale_details")
 public class SaleDetailEntity {

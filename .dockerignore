@@ -1,0 +1,47 @@
+# ============================================================================
+#  .dockerignore — Qué NO se envía al contexto de build de Docker.
+# ----------------------------------------------------------------------------
+#  Próposito doble:
+#   1) SEGURIDAD: evita que secretos/credenciales locales entren a la imagen
+#      (application-local.yaml, .env, keystores, etc.).
+#   2) RENDIMIENTO: no le manda a Docker basura que no usa para compilar
+#      (target/, .git/, IDE, etc.). La etapa de build regenera lo necesario.
+# ============================================================================
+
+# Control de versiones y metadatos
+.git
+.gitignore
+.gitattributes
+
+# Notas internas de trabajo (contienen credenciales de dev)
+AGENTS.md
+
+# Archivos de entorno (NUNCA deben entrar al contenedor)
+.env
+**/.env
+.env.*
+!*.env.example
+application-local.yaml
+application-*.yaml
+
+# Compilación generada (se regenera dentro de la etapa build)
+target/
+
+# Imágenes subidas localmente (no son código)
+uploads/
+
+# Secretos de terminal / certificados
+*.jks
+*.p12
+*.cer
+*.crt
+*.key
+*.pem
+
+# Logs y basura de IDE
+*.log
+.vscode/
+.idea/
+HELP.md
+*.iml
+*.ipr

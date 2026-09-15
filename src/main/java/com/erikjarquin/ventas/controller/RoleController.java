@@ -4,7 +4,6 @@ import java.util.List;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -19,9 +18,12 @@ import com.erikjarquin.ventas.model.dto.Role.RoleDto;
 import com.erikjarquin.ventas.model.dto.Role.UpdateRoleRequest;
 import com.erikjarquin.ventas.service.RoleService;
 
+/**
+ * Roles y su asignación de permisos. Permisos: VER_ROLES, CREAR_ROLES,
+ * EDITAR_ROLES, ELIMINAR_ROLES. CORS global (${CORS_ALLOWED_ORIGINS}).
+ */
 @RestController
 @RequestMapping("/api/roles")
-@CrossOrigin(origins = "http://localhost:4200")
 public class RoleController {
     private final RoleService service;
 

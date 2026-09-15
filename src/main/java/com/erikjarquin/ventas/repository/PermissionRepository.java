@@ -10,7 +10,10 @@ import org.springframework.stereotype.Repository;
 import com.erikjarquin.ventas.model.entity.PermissionEntity;
 import com.erikjarquin.ventas.model.enums.PermissionName;
 
-//Repositorio de permisos
+/**
+ * Repositorio de permisos. findByNameIn es usado por PermissionBootstrap y
+ * RolePermissionBootstrap para asignar permisos a roles de una sola vez.
+ */
 @Repository //
 public interface PermissionRepository extends JpaRepository<PermissionEntity, Long>{
     //Buscar permiso

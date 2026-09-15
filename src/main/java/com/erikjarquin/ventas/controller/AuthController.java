@@ -15,8 +15,15 @@ import com.erikjarquin.ventas.model.dto.ResetPassword.ResetPasswordRequest;
 import com.erikjarquin.ventas.model.entity.UserEntity;
 import com.erikjarquin.ventas.service.AuthService;
 
-@RestController //
-@RequestMapping("/api/auth") //
+/**
+ * Autenticación y gestión de contraseñas (login, recuperación y cambio).
+ *
+ * <p>Es el único grupo de endpoints marcados como PÚBLICOS en SecurityConfig
+ * ({@code /api/auth/**} → permitAll), pues el login/recuperación ocurre antes de
+ * tener un token.
+ */
+@RestController
+@RequestMapping("/api/auth")
 public class AuthController {
     private final AuthService service;
 

@@ -3,6 +3,10 @@ package com.erikjarquin.ventas.mapper;
 import com.erikjarquin.ventas.model.dto.Permissions.PermissionResponse;
 import com.erikjarquin.ventas.model.entity.PermissionEntity;
 
+/**
+ * Mapper estático permiso → DTO. El constructor privado evita instanciarlo
+ * (solo expone el método estático toDto).
+ */
 public class PermissionMapper {
     private PermissionMapper(){}
 

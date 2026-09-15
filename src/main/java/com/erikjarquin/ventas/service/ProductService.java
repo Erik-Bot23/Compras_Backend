@@ -7,7 +7,11 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.erikjarquin.ventas.model.dto.Products.ProductDto;
 
-//Service de productos
+/**
+ * Contrato del catálogo de productos (CRUD, filtro, búsquedas).
+ * Las operaciones de alta/edición reciben la imagen como MultipartFile y la
+ * guardan mediante FileStorageService. Ver {@code service/impl/ProductImpl}.
+ */
 public interface ProductService {
     //Listar todos los productos
     List<ProductDto> getAll();

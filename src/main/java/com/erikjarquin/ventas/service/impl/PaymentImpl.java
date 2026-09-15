@@ -24,8 +24,19 @@ import com.erikjarquin.ventas.service.TerminalService;
 
 import lombok.extern.slf4j.Slf4j;
 
-@Service //
-@Slf4j //
+/**
+ * Implementación del módulo de PAGOS con tarjeta.
+ *
+ * <p>Flujo: valida la venta → construye la solicitud para la terminal
+ * (SIMULADA o física) → si la terminal aprueba, guarda el PaymentEntity
+ * APPROVED y marca la venta como paga. Incluye:
+ *  - Idempotencia por venta (una venta no se paga dos veces).
+ *  - Reintentos de pagos rechazados (máximo 3).
+ *  - Reversas de pagos aprobados.
+ *  - Consulta de estado de transacciones pendientes.
+ */
+@Service
+@Slf4j
 public class PaymentImpl implements PaymentService {
     private final SaleRepository saleRepository;
     private final PaymentRepository paymentRepository;
@@ -176,7 +187,7 @@ public class PaymentImpl implements PaymentService {
     @Override
     @Transactional
     public CardPaymentResponse retryPayment(Long paymentId){
-        log.info("Reintentando pago ID:", paymentId);
+        log.info("Reintentando pago ID: {}", paymentId);
 
         PaymentEntity payment = paymentRepository.findById(paymentId).orElseThrow(
             () -> new PaymentException("Pago no encontrado con ID: " + paymentId));

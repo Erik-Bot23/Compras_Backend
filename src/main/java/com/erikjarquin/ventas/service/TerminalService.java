@@ -3,7 +3,12 @@ package com.erikjarquin.ventas.service;
 import com.erikjarquin.ventas.model.dto.Terminal.TerminalRequest;
 import com.erikjarquin.ventas.model.dto.Terminal.TerminalResponse;
 
-//Service de terminal
+/**
+ * Abstracción del terminal de pagos. Dos implementaciones:
+ *  - {@code TimerSimulatedImpl} (pruebas, tarjetas deterministas/aleatorias)
+ *  - {@code TerminalPhysicalImpl} (terminal real por Socket TCP, protocolo PAY|/REV|/STS|)
+ * Se elige según la propiedad {@code payment.terminal.type} (SIMULATED | PHYSICAL).
+ */
 public interface TerminalService {
     /**
      * Procesa un pago a través de la terminal

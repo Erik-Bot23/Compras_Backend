@@ -1,8 +1,21 @@
 package com.erikjarquin.ventas.model.enums;
 
+/**
+ * Catálogo de permisos (38). Cada nombre se usa en entidades PermissionEntity
+ * (columna name) y en los @PreAuthorize("hasAuthority('...')") de los
+ * controllers: el string debe coincidir EXACTAMENTE con el nombre del enum.
+ */
 public enum PermissionName {
-    //Compras
+    //Compras (módulo completo: ver, registrar y cancelar compras)
     VER_COMPRAS,
+    CREAR_COMPRAS,
+    CANCELAR_COMPRAS,
+
+    //Proveedores (CRUD de proveedores que alimenta el módulo de compras)
+    VER_PROVEEDORES,
+    CREAR_PROVEEDORES,
+    EDITAR_PROVEEDORES,
+    ELIMINAR_PROVEEDORES,
 
     //Productos
     VER_PRODUCTOS,
@@ -23,6 +36,7 @@ public enum PermissionName {
     //Categorías
     VER_CATEGORIAS,
     CREAR_CATEGORIAS,
+    EDITAR_CATEGORIAS,
     ELIMINAR_CATEGORIAS,
 
     //Ventas

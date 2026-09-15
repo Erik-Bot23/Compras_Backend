@@ -4,6 +4,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,9 +16,15 @@ import com.erikjarquin.ventas.model.entity.PermissionEntity;
 import com.erikjarquin.ventas.model.entity.RoleEntity;
 import com.erikjarquin.ventas.model.enums.PermissionName;
 import com.erikjarquin.ventas.repository.PermissionRepository;
+import com.erikjarquin.ventas.exceptions.RoleException;
 import com.erikjarquin.ventas.repository.RoleRepository;
 import com.erikjarquin.ventas.service.RoleService;
 
+/**
+ * Implementación de roles y su relación N:M con permisos.
+ * Reglas: nombre único y obligatorio, permisos deben existir, y no se puede
+ * eliminar un rol que todavía tenga usuarios asignados.
+ */
 @Service
 public class RoleImpl implements RoleService {
     private final RoleRepository repository;
@@ -39,7 +46,7 @@ public class RoleImpl implements RoleService {
     @Override
     @Transactional(readOnly = true)
     public RoleDto getRoleById(Long id){
-        RoleEntity role = repository.findById(id).orElseThrow(() -> new RuntimeException("Rol no encontrado"));
+        RoleEntity role = repository.findById(id).orElseThrow(() -> new RoleException("Rol no encontrado"));
 
         return RoleMapper.toDto(role);
     }
@@ -50,7 +57,7 @@ public class RoleImpl implements RoleService {
         validateRoleName(request.getName());
 
         if(repository.existsByName(request.getName())){
-            throw new RuntimeException("Ya existe un rol con ese nombre");
+            throw new RoleException("Ya existe un rol con ese nombre", HttpStatus.CONFLICT);
         }
 
         Set<PermissionEntity> permissions = findPermissions(request.getPermissions());
@@ -67,12 +74,12 @@ public class RoleImpl implements RoleService {
     //Actualizar role
     @Override
     public RoleDto updateRole(Long id, UpdateRoleRequest request){
-        RoleEntity role = repository.findById(id).orElseThrow(() -> new RuntimeException("Rol no encontrado"));
+        RoleEntity role = repository.findById(id).orElseThrow(() -> new RoleException("Rol no encontrado"));
 
         validateRoleName(request.getName());
 
         if(!role.getName().equals(request.getName()) && repository.existsByName(request.getName())){
-            throw new RuntimeException("Ya existe un rol con ese nombre");
+            throw new RoleException("Ya existe un rol con ese nombre", HttpStatus.CONFLICT);
         }
 
         Set<PermissionEntity> permissions = findPermissions(request.getPermissions());
@@ -88,10 +95,10 @@ public class RoleImpl implements RoleService {
     @Override
     public void deleteRole(Long id){
         RoleEntity role = repository.findById(id).orElseThrow(() -> 
-        new RuntimeException("Role no encontrado"));
+        new RoleException("Rol no encontrado"));
 
         if(role.getUsers() != null && !role.getUsers().isEmpty()){
-            throw new RuntimeException("No puedes eliminar un role con usuarios");
+            throw new RoleException("No puedes eliminar un rol con usuarios asignados", HttpStatus.CONFLICT);
         }
         repository.deleteById(id);
     }
@@ -107,7 +114,7 @@ public class RoleImpl implements RoleService {
         List<PermissionEntity> permissions = permissionRepository.findByNameIn(names);
 
         if(permissions.size() != names.size()){
-            throw new RuntimeException("Uno o más permisos no existen");
+            throw new IllegalArgumentException("Uno o más permisos no existen");
         }
 
         return new HashSet<>(permissions);
@@ -118,14 +125,14 @@ public class RoleImpl implements RoleService {
         try {
             return PermissionName.valueOf(permission);
         } catch (IllegalArgumentException e) {
-            throw new RuntimeException("Permiso inválido: " + permission);
+            throw new IllegalArgumentException("Permiso inválido: " + permission);
         }
     }
 
     //Validar que se le asigne nombre al rol
     private void validateRoleName(String name){
         if(name == null || name.trim().isEmpty()){
-            throw new RuntimeException("El nombre del rol es obligatorio");
+            throw new IllegalArgumentException("El nombre del rol es obligatorio");
         }
     }
 

@@ -6,7 +6,10 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import com.erikjarquin.ventas.model.entity.RoleEntity;
 
-//Repositotio de role
+/**
+ * Repositorio de roles. findByName es usado por los bootstraps (búsqueda por
+ * nombre de rol) y existsByName para evitar duplicar roles.
+ */
 public interface RoleRepository extends JpaRepository<RoleEntity, Long> {
     //Encontrar role por nombre
     Optional<RoleEntity> findByName(String name);

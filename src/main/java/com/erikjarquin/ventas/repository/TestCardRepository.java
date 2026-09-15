@@ -10,7 +10,14 @@ import com.erikjarquin.ventas.model.dto.Terminal.TestCard;
 
 import lombok.extern.slf4j.Slf4j;
 
-//Repositorio de tarjetas
+/**
+ * Repositorio de tarjetas de PRUEBA (solo usado por TerminalSimulatedImpl).
+ *
+ * <p>⚠️ En memoria (NO persiste): vive en el MAP con tarjetas determinísticas
+ * para simular casos: saldo suficiente/insuficiente, bloqueada, PIN inválido
+ * y crédito. En producción con TERMINAL_TYPE=PHYSICAL este repo no se usa.
+ * NUNCA guardar datos reales de tarjetas aquí.
+ */
 @Slf4j
 @Repository
 public class TestCardRepository {

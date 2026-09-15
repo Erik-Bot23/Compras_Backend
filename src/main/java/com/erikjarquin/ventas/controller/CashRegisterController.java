@@ -1,7 +1,6 @@
 package com.erikjarquin.ventas.controller;
 
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -14,9 +13,14 @@ import com.erikjarquin.ventas.model.dto.Cash.CloseCashRequest;
 import com.erikjarquin.ventas.model.dto.Cash.OpenCashRequest;
 import com.erikjarquin.ventas.service.CashRegisterService;
 
+/**
+ * Caja registradora: apertura, cierre, resumen y consulta de caja activa.
+ *
+ * <p>Permisos: ABRIR_CAJA, CERRAR_CAJA, VER_CAJA, CORTE_CAJA.
+ * CORS global (${CORS_ALLOWED_ORIGINS}) en SecurityConfig.
+ */
 @RestController
 @RequestMapping("/api/cash")
-@CrossOrigin(origins = "http://localhost:4200") //
 public class CashRegisterController {
     private final CashRegisterService service;
 

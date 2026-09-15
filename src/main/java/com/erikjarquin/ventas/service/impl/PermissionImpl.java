@@ -10,8 +10,12 @@ import com.erikjarquin.ventas.model.dto.Permissions.PermissionResponse;
 import com.erikjarquin.ventas.repository.PermissionRepository;
 import com.erikjarquin.ventas.service.PermissionService;
 
+/**
+ * Implementación de permisos (solo lectura). Devuelve el catálogo completo
+ * de permisos disponibles para que el frontend arme la asignación de roles.
+ */
 @Service
-@Transactional(readOnly = true) //
+@Transactional(readOnly = true)
 public class PermissionImpl implements PermissionService {
     private final PermissionRepository permissionRepository;
 

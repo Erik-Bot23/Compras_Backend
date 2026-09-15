@@ -17,6 +17,13 @@ import jakarta.persistence.Id;
 import jakarta.persistence.ManyToMany;
 import jakarta.persistence.Table;
 
+/**
+ * Entidad {@code permissions}: acción individual autorizable.
+ *
+ * <p>name es el enum PermissionName (31 valores) y se persiste como String.
+ * equals/hashCode se basan SOLO en name (necesario para que los Sets de
+ * permisos funcionen y el bootstrap los compare por nombre).
+ */
 @Entity
 @Table(name = "permissions")
 public class PermissionEntity {

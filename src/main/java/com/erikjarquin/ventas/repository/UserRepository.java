@@ -8,7 +8,13 @@ import org.springframework.data.repository.query.Param;
 
 import com.erikjarquin.ventas.model.entity.UserEntity;
 
-//Repositorio de user
+/**
+ * Repositorio de usuarios.
+ *
+ * <p>findByEmailWithRoleAndPermissions usa JOIN FETCH para cargar rol y
+ * permisos en UNA consulta (evita N+1 y errores de LazyInitialization en
+ * el AuthenticationProvider, donde se construyen las autoridades).
+ */
 public interface UserRepository extends JpaRepository<UserEntity, Long> {
     Optional<UserEntity> findByEmail(String email);
 

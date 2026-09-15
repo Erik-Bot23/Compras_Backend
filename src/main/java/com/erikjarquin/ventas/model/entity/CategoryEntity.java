@@ -12,6 +12,10 @@ import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 
+/**
+ * Entidad {@code categories}: clasifica los productos (la categoría es única).
+ * products se serializa como @JsonIgnore para evitar ciclos JSON.
+ */
 @Entity
 @Table(name = "categories")
 public class CategoryEntity {

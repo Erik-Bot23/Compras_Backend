@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import com.erikjarquin.ventas.exceptions.CashException;
@@ -18,7 +19,15 @@ import com.erikjarquin.ventas.repository.CashRegisterRepository;
 import com.erikjarquin.ventas.repository.SaleRepository;
 import com.erikjarquin.ventas.service.CashRegisterService;
 
-@Service //
+/**
+ * Implementación de la caja registradora.
+ *
+ * <p>Reglas: solo puede existir UNA caja abierta a la vez. Al cerrar se calcula
+ * el resumen por método de pago (efectivo/débito/crédito) y la diferencia contra
+ * el efectivo contado. Los errores de negocio se lanzan como CashException con
+ * el HttpStatus adecuado (409 si ya hay caja abierta, 404 si no existe).
+ */
+@Service
 public class CashRegisterImpl implements CashRegisterService {
     private final CashRegisterRepository repository;
     private final CashRegisterMapper mapper;
@@ -37,7 +46,7 @@ public class CashRegisterImpl implements CashRegisterService {
     @Override //
     public CashResponse open(OpenCashRequest request){
         repository.findByActiveTrue().ifPresent(c -> {
-            throw new RuntimeException("Ya existe una caja abierta");
+            throw new CashException("Ya existe una caja abierta", HttpStatus.CONFLICT);
         });
 
         CashRegisterEntity cash = new CashRegisterEntity();
@@ -63,7 +72,7 @@ public class CashRegisterImpl implements CashRegisterService {
     @Override
     public CashResponse close(CloseCashRequest request){
         CashRegisterEntity cash = repository.findByActiveTrue().orElseThrow(() -> 
-            new RuntimeException("No existe caja abierta"));
+            new CashException("No existe caja abierta"));
 
         CashSummaryResponse summary = calculateSummary(cash);
 
@@ -100,7 +109,7 @@ public class CashRegisterImpl implements CashRegisterService {
     @Override
     public CashSummaryResponse getSummary(){
         CashRegisterEntity cash = repository.findByActiveTrue().orElseThrow(() ->
-            new RuntimeException("No existe caja abierta"));
+            new CashException("No existe caja abierta"));
 
         return calculateSummary(cash);
     }

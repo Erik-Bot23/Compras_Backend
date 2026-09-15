@@ -16,7 +16,17 @@ import com.erikjarquin.ventas.model.enums.PermissionName;
 import com.erikjarquin.ventas.repository.PermissionRepository;
 import com.erikjarquin.ventas.repository.RoleRepository;
 
-//Asginar los permisos a los primeros roles
+/**
+ * Bootstrap (@Order 4) que asigna permisos a los roles creados:
+ *  - ADMIN      → TODOS los permisos.
+ *  - CAJERO     → ver/crear ventas, ver productos, abrir/cerrar caja.
+ *  - ALMACENISTA→ ver/crear/editar productos + ver/crear compras y ver
+ *                 proveedores (gestiona reposición de inventario).
+ *
+ * <p>Idempotente y SELF-HEALING: en cada arranque se REASIGNA el set de
+ * permisos definido aquí. Si en el futuro cambias estas listas, los roles se
+ * actualizan solos al reiniciar (sincronizan lo que agregues o quites).
+ */
 @Component
 @Order(4)
 @Transactional
@@ -37,35 +47,33 @@ public class RolePermissionBootstrap implements CommandLineRunner {
 
         List<PermissionEntity> allPermissions = permissionRepository.findAll();
 
-        if(admin.getPermissions().isEmpty()) {
-            admin.setPermissions(new HashSet<>(allPermissions));
-            roleRepository.save(admin);
-        }
+        // Se reasigna TODO en cada arranque: si la lista de abajo cambia, los
+        // permisos de los roles se sincronizan solos (idempotente).
+        admin.setPermissions(new HashSet<>(allPermissions));
+        roleRepository.save(admin);
 
-        if(cajero.getPermissions().isEmpty()){
-            cajero.setPermissions(filterPermissions(
-                    allPermissions, 
-                    PermissionName.VER_PRODUCTOS,
-                    PermissionName.VER_VENTAS,
-                    PermissionName.CREAR_VENTAS,
-                    PermissionName.ABRIR_CAJA,
-                    PermissionName.CERRAR_CAJA
-                )
-            );
-            roleRepository.save(cajero);
-        }
+        cajero.setPermissions(filterPermissions(
+                allPermissions,
+                PermissionName.VER_PRODUCTOS,
+                PermissionName.VER_VENTAS,
+                PermissionName.CREAR_VENTAS,
+                PermissionName.ABRIR_CAJA,
+                PermissionName.CERRAR_CAJA
+            )
+        );
+        roleRepository.save(cajero);
 
-        if(almacenista.getPermissions().isEmpty()) {
-            almacenista.setPermissions(filterPermissions(
-                    allPermissions,
-                    PermissionName.VER_PRODUCTOS,
-                    PermissionName.CREAR_PRODUCTOS,
-                    PermissionName.EDITAR_PRODUCTOS
-                )
-            );
-            roleRepository.save(almacenista);
-        }
-
+        almacenista.setPermissions(filterPermissions(
+                allPermissions,
+                PermissionName.VER_PRODUCTOS,
+                PermissionName.CREAR_PRODUCTOS,
+                PermissionName.EDITAR_PRODUCTOS,
+                PermissionName.VER_COMPRAS,
+                PermissionName.CREAR_COMPRAS,
+                PermissionName.VER_PROVEEDORES
+            )
+        );
+        roleRepository.save(almacenista);
     }
 
     private Set<PermissionEntity> filterPermissions(List<PermissionEntity> permissions,PermissionName...permissionNames){

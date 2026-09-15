@@ -12,6 +12,13 @@ import com.erikjarquin.ventas.model.entity.SaleDetailEntity;
 import com.erikjarquin.ventas.model.entity.SaleEntity;
 import com.erikjarquin.ventas.model.enums.PaymentMethod;
 
+/**
+ * Mapper venta → respuestas de venta/historial/detalle (componente de Spring).
+ *
+ * <p>En pagos con tarjeta expone SOLO los últimos 4 dígitos y el código de
+ * autorización (nunca el número completo). toDetailResponse arma el detalle
+ * con historial, manejando details nulo como lista vacía.
+ */
 @Component
 public class SaleMapper {
     public SaleResponse toResponse(SaleEntity sale){

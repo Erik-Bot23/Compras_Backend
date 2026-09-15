@@ -9,6 +9,16 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
+/**
+ * Entidad {@code cash_registers}: registro de apertura/cierre de caja.
+ *
+ * <p>active=true indica la caja vigente (solo una a la vez). Durante el cierre
+ * se congela el "corte": expectedAmount (fondo inicial + ventas en efectivo),
+ * difference (contado - esperado) y los totales por método de pago.
+ *
+ * <p>Nota: el usuario que abre la caja NO se registra en esta versión (la
+ * relación a User está planeada, por eso la entidad no tiene FK a users).
+ */
 @Entity
 @Table(name = "cash_registers")
 public class CashRegisterEntity {
@@ -40,12 +50,6 @@ public class CashRegisterEntity {
     private BigDecimal totalSales;
 
     private int totalTickets;
-
-    /* 
-    @ManyToOne
-    @JoinColumn(name = "user_id")
-    private UserEntity user;
-    */
 
     public CashRegisterEntity(){}
 

@@ -31,3 +31,29 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Secretos y variables de entorno (NUNCA versionar) ###
+# Valores reales de ${VAR} del application.yaml. Se definen en Railway
+# como Variables de entorno y en local dentro de application-local.yaml
+# (este archivo). Si ves uno de estos en tu repo, es una fuga de credenciales.
+.env
+.env.*
+*.env
+!*.env.example
+application-local.yaml
+application-*.yaml
+!application.yaml
+
+### Imágenes subidas por usuarios (se regeneran; no son código) ###
+uploads/
+
+### Keystores / certificados de la terminal de pagos ###
+*.jks
+*.p12
+*.cer
+*.crt
+*.key
+*.pem
+
+### Logs (pueden contener SQL/datos sensibles) ###
+*.log

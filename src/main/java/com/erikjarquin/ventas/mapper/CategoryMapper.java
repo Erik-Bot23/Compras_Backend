@@ -2,7 +2,9 @@ package com.erikjarquin.ventas.mapper;
 
 import com.erikjarquin.ventas.model.dto.Categories.CategoryDto;
 import com.erikjarquin.ventas.model.entity.CategoryEntity;
-//Commit de prueba
+/**
+ * Mapper estático categoría ↔ DTO (solo id+name).
+ */
 public class CategoryMapper {
     
     public static CategoryDto toDto(CategoryEntity entity){

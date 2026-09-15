@@ -7,10 +7,13 @@ import org.springframework.stereotype.Component;
 import com.erikjarquin.ventas.model.entity.RoleEntity;
 import com.erikjarquin.ventas.repository.RoleRepository;
 
-//Crear los roles
+/**
+ * Bootstrap (@Order 1) que crea los roles base si no existen: ADMIN, CAJERO
+ * y ALMACENISTA. Se ejecuta antes que AdminBootstrap (que necesita rol ADMIN).
+ */
 @Component
 @Order(1)
-public class RoleBootstrap  implements CommandLineRunner {
+public class RoleBootstrap implements CommandLineRunner {
     private final RoleRepository roleRepository;
 
     public RoleBootstrap(RoleRepository roleRepository){

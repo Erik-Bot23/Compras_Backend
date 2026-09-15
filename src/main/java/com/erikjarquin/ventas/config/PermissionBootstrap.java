@@ -8,7 +8,11 @@ import com.erikjarquin.ventas.model.entity.PermissionEntity;
 import com.erikjarquin.ventas.model.enums.PermissionName;
 import com.erikjarquin.ventas.repository.PermissionRepository;
 
-//Crear los permisos
+/**
+ * Bootstrap (@Order 3) que inserta en BD todos los valores del enum
+ * {@link PermissionName} (los permisos del sistema) si aún no existen.
+ * Al agregar un valor nuevo al enum se crea solo en el siguiente arranque.
+ */
 @Component
 @Order(3)
 public class PermissionBootstrap implements CommandLineRunner {

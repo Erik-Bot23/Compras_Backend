@@ -18,6 +18,13 @@ import com.erikjarquin.ventas.model.dto.User.UpdateUserRequest;
 import com.erikjarquin.ventas.model.dto.User.UserDto;
 import com.erikjarquin.ventas.service.UserService;
 
+/**
+ * CRUD de usuarios del sistema.
+ *
+ * <p>Cada acción exige un PERMISO específico vía @PreAuthorize:
+ * VER_USUARIOS, CREAR_USUARIOS, EDITAR_USUARIOS, DESACTIVAR_USUARIOS,
+ * ACTIVAR_USUARIOS. Sin el token de un usuario con ese permiso → 403.
+ */
 @RestController
 @RequestMapping("/api/users")
 public class UserController {

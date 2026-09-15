@@ -3,6 +3,10 @@ package com.erikjarquin.ventas.mapper;
 import com.erikjarquin.ventas.model.dto.User.UserDto;
 import com.erikjarquin.ventas.model.entity.UserEntity;
 
+/**
+ * Mapper estático usuario → DTO.
+ * NUNCA expone el password (ni siquiera hasheado) fuera de la capa de servicio.
+ */
 public class UserMapper {
     public static UserDto toDto(UserEntity entity){
         if(entity == null) return null;

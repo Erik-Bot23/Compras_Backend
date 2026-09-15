@@ -12,6 +12,14 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
+/**
+ * Entidad {@code users}: un usuario del sistema con su rol y datos de sesión.
+ *
+ * <p>La contraseña SIEMPRE se guarda hasheada (BCrypt). Cuando se "elimina"
+ * un usuario, en realidad se desactiva (active=false) para conservar el
+ * historial de ventas. Los campos resetToken/resetTokenExpiration se usan en
+ * la recuperación de contraseña (token de 1 hora de validez).
+ */
 @Entity
 @Table(name = "users")
 public class UserEntity {

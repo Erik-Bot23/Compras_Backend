@@ -12,6 +12,13 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
+/**
+ * Entidad {@code products}: artículos del inventario para la venta.
+ *
+ * <p>{@code img} guarda el NOMBRE del archivo en disco (UUID+ext), no la URL;
+ * la URL completa la construye ProductMapper con ${app.upload-url}.
+ * barcode y sku son únicos; stock es la cantidad física disponible.
+ */
 @Entity
 @Table(name="products")
 public class ProductEntity {
@@ -25,6 +32,14 @@ public class ProductEntity {
 
     @Column(nullable = false)
     private BigDecimal price;
+
+    /**
+     * Costo unitario REAL del producto, alimentado por el módulo de COMPRAS:
+     * al registrar una compra se guarda el último unitCost recibido. 0 cuando
+     * nunca se ha comprado. price - cost = margen (estadística de Márgenes).
+     */
+    @Column(precision = 10, scale = 2)
+    private BigDecimal cost = BigDecimal.ZERO;
 
     @Column(nullable = false)
     private int stock;
@@ -68,6 +83,15 @@ public class ProductEntity {
 
     public void setPrice(BigDecimal price){
         this.price=price;
+    }
+
+    //Getter y setter de cost
+    public BigDecimal getCost(){
+        return cost;
+    }
+
+    public void setCost(BigDecimal cost){
+        this.cost=cost;
     }
 
     //getter y setter de stock

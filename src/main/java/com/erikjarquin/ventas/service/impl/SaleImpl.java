@@ -32,9 +32,23 @@ import com.erikjarquin.ventas.service.SaleService;
 
 import lombok.extern.slf4j.Slf4j;
 
-@Slf4j //
-@Service // 
-@Transactional //
+/**
+ * Implementación del flujo COMPLETO de una venta.
+ *
+ * <p>Pasos (todo dentro de una transacción con rollback):
+ *  1. Valida la solicitud y que exista una caja abierta.
+ *  2. Crea la venta como PENDING (para obtener ID).
+ *  3. Calcula el total en memoria validando productos y stock.
+ *  4. Procesa el pago: efectivo (valida cambio) o tarjeta (delega en
+ *     PaymentService / terminal).
+ *  5. Solo si el pago fue exitoso: aprueba la venta y DESCUENTA stock.
+ *
+ * <p>Si el pago con tarjeta falla, la excepción hace rollback total de la
+ * transacción (la venta PENDING y el pago no quedan persistidos).
+ */
+@Slf4j
+@Service
+@Transactional
 public class SaleImpl implements SaleService {
     private final ProductRepository productRepository;
     private final SaleRepository saleRepository;
@@ -100,7 +114,7 @@ public class SaleImpl implements SaleService {
         // a) Guardar la venta
         savedSale.setPaymentStatus(PaymentStatus.APPROVED);
 
-        // b) Descomyar de stock
+        // b) Descontar de stock
         for(SaleDetailEntity detail : savedSale.getDetails()){
             ProductEntity product = detail.getProduct();
             product.setStock(product.getStock() - detail.getQuantity());
