@@ -20,7 +20,6 @@ import com.erikjarquin.ventas.model.dto.Reports.PaymentMethodDTO;
 import com.erikjarquin.ventas.model.dto.Reports.PeriodSalesDTO;
 import com.erikjarquin.ventas.model.dto.Reports.ReportsSummaryDTO;
 import com.erikjarquin.ventas.model.dto.Reports.TopProductDTO;
-import com.erikjarquin.ventas.model.entity.ProductEntity;
 import com.erikjarquin.ventas.model.enums.PaymentMethod;
 import com.erikjarquin.ventas.model.enums.PaymentStatus;
 import com.erikjarquin.ventas.model.enums.ReportGroup;
