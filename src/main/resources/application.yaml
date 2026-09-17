@@ -74,6 +74,12 @@ app:
   #   Local      : http://localhost:4200
   #   Netlify    : https://tu-app.netlify.app   → via FRONTEND_URL
   frontend-url: ${FRONTEND_URL:http://localhost:4200}
+  # Control del SEED inicial de roles/permisos/admin (bootstraps).
+  #   true  (default) : crea roles si la tabla está vacía, crea permisos
+  #                     faltantes, crea el admin inicial y reasigna permisos.
+  #   false           : los bootstraps NO tocan roles/permisos/usuarios.
+  #                     Útil en producción o cuando quieres controlar todo a mano.
+  seed-bootstraps: ${APP_SEED_BOOTSTRAPS:true}
   # Carpeta física donde se guardan las imágenes de productos.
   #   Local   : ./uploads (default)
   #   Railway : via UPLOAD_DIR apuntando al VOLUMEN persistente montado, p. ej.

@@ -18,8 +18,8 @@
 Capas: `controller/ → service/ (interfaz) → service/impl/ → repository/ → model/entity/`. DTOs en `model/dto/`, Mappers en `mapper/` (algunos estáticos, otros `@Component`), config en `config/`, excepciones en `exceptions/`.
 
 - **12 controllers, 54 endpoints** (`/api/...`)
-- Autorización por permiso vía `@PreAuthorize("hasAuthority('...')")` (**34 permisos** en `PermissionName`)
-- 4 `CommandLineRunner` de bootstrap (orden): `RoleBootstrap` → `AdminBootstrap` → `PermissionBootstrap` → `RolePermissionBootstrap`
+- Autorización por permiso vía `@PreAuthorize("hasAuthority('...')")` (**32 permisos** en `PermissionName`)
+- 4 `CommandLineRunner` de bootstrap (orden): `RoleBootstrap` → `AdminBootstrap` → `PermissionBootstrap` → `RolePermissionBootstrap`. Todos respetan el flag `app.seed-bootstraps` (`APP_SEED_BOOTSTRAPS`, default `true`) y siembran **solo si está vacío** (NO self-healing; ver 2026-09-17 (2)).
 - Admin inicial: `18jarquinsanchezerik1a@gmail.com` / `1234`
 
 ## Endpoints principales
@@ -49,6 +49,17 @@ Capas: `controller/ → service/ (interfaz) → service/impl/ → repository/ �
 - **Compras**: módulo completo (ver sesión 2026-09-13 (2)). Proveedores (CRUD, RFC único) + compras con renglones que al registrarse SUMAN stock y guardan el costo real del producto; cancelación revierte stock. `margins` (costo real vs precio) en reportes.
 
 ## Registro de cambios / decisiones
+
+### 2026-09-17 (2) — Flag de seed + fin del self-healing + tests de controllers
+
+1. **Flag `APP_SEED_BOOTSTRAPS`** (default `true`, `application.yaml:82`): los 4 bootstraps lo inyectan con `@Value("${app.seed-bootstraps:true}")` y hacen `return` temprano si está en `false` (entornos donde el admin gestiona roles/permisos a mano).
+   - ⚠️ **Trampa**: en `false` con la BD **vacía** no se siembra NADA (ni roles ni admin) → no se puede loguear. En `application-local.yaml` quedó en `true` con ese aviso comentado. Ponlo en `false` SOLO en BD ya inicializadas o producción.
+2. **`RolePermissionBootstrap` dejó de ser self-healing** (bug reportado: borrabas CAJERO y al reiniciar volvía a crearse / reasignaba permisos en cada arranque). Ahora **siembra solo la primera vez**: si algún rol base ya tiene permisos, omite el seed y respeta la gestión manual. Los roles borrados a mano NO se recrean (se omiten) y ya no lanza excepción si falta ADMIN/CAJERO/ALMACENISTA.
+   - `RoleBootstrap` sigue sembrando los 3 roles **solo si la tabla `roles` está vacía**; `AdminBootstrap` solo crea el admin **si su email no existe**; `PermissionBootstrap` solo **inserta los faltantes**.
+   - **Usuarios NO tienen doble ejecución**: si cambias la contraseña del admin, persiste al reiniciar (verificado).
+3. **Permisos `VER_CLIENTES` y `VER_FACTURAS` eliminados** (módulos clientes/facturas descartados): enum 34 → **32**. La caja se conserva para el POS. ⚠️ Corrige lo que decía la sesión "2026-sesión" punto 3 (que los conservaba).
+4. **Tests de controllers**: 10 clases nuevas (`@WebMvcTest` + `@WithMockUser` + `@MockitoBean`) en `src/test/.../controller/`; `pom.xml` habilitó `spring-boot-starter-webmvc-test` y `spring-boot-starter-security-test`. Nuevo `RolePermissionBootstrapTest` (4 casos: ya sembrado no reasigna, BD vacía siembra, rol borrado no falla, flag off no hace nada). **118 tests en verde**. Bug corregido: `ReportControllerTest` mezclaba matchers con valor crudo (`isNull(), isNull(), 10` → `eq(10)`).
+5. `mvn test` verificado OK.
 
 ### 2026-09-17 — Eliminado `GET /ping` + limpieza de referencias
 
@@ -120,10 +131,10 @@ Capas: `controller/ → service/ (interfaz) → service/impl/ → repository/ �
 
 - ⚠️ **Secretos en historial de git**: purgar con `git filter-repo` antes de publicar el repo.
 - **Imágenes**: sin perfil dev/prod separado en el frontend para `environment-prod.ts` (requiere definir la API de Railway al desplegar).
-- **Tests**: 35 en verde (repos + servicios + file storage); falta cobertura de controllers con Mockito/WebMvc.
-- Frontend: componentes `Ventas`, `Clientes`, `Facturas` son placeholders; `Caja` también (su "hoja de corte" vive hoy en Reportes). `reversePayment` del backend no tiene UI (requiere un listado/detalle de pagos).
+- **Tests**: **118 en verde** (repos + servicios + file storage + 10 controllers WebMvc + bootstraps).
+- Frontend: módulos **Clientes y Facturas descartados** (permisos eliminados). `Caja` sigue como placeholder porque su "hoja de corte" vive hoy en Reportes. `reversePayment` del backend no tiene UI (requiere un listado/detalle de pagos).
 - ⚠️ **BD local**: el CHECK `permissions_name_check` (generado por Hibernate para `@Enumerated`) NO se actualiza con `ddl-auto:update`. Al agregar permisos al enum el arranque puede fallar con "viola la restricción check" → droppear el constraint en BD local (`ALTER TABLE permissions DROP CONSTRAINT permissions_name_check`) o usar BD nueva.
-- **Código pendiente**: falta cambiar `System.out.println` de los bootstraps por un logger; `//` suelto en `CashRegisterController` (corregido en otra sesión). ⚠️ Al estar trabajando entre máquinas, un AGENTS.md desactualizado hizo que otra laptop recreara `pingController`; ya está eliminado de nuevo (ver sesión 2026-09-17) — no recrearlo.
+- **Código pendiente**: falta cambiar `System.out.println` de los bootstraps por un logger. ⚠️ Al estar trabajando entre máquinas, un AGENTS.md desactualizado hizo que otra laptop recreara `pingController`; ya está eliminado de nuevo (ver sesión 2026-09-17) — no recrearlo.
 
 ## Cómo ejecutar
 

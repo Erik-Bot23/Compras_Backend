@@ -100,20 +100,21 @@
 		</dependency>
 		
 		<!--
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-security-test</artifactId>
-			<scope>test</scope>
-		</dependency>
+			Tests de controladores (MockMvc): spring-boot-starter-webmvc-test trae
+			@WebMvcTest / MockMvc / AssertJ / Mockito; spring-security-test trae
+			@WithMockUser para probar @PreAuthorize sin generar tokens JWT reales.
+			Sin estas dependencias los tests de controllers no compilan.
 		-->
-		
-		<!--
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webmvc-test</artifactId>
 			<scope>test</scope>
 		</dependency>
-		-->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security-test</artifactId>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 	<build>

@@ -1,18 +1,23 @@
 package com.erikjarquin.ventas.model.enums;
 
 /**
- * Catálogo de permisos (34). Cada nombre se usa en entidades PermissionEntity
+ * Catálogo de permisos (32). Cada nombre se usa en entidades PermissionEntity
  * (columna name) y en los @PreAuthorize("hasAuthority('...')") de los
  * controllers: el string debe coincidir EXACTAMENTE con el nombre del enum.
  *
  * <p>Organizados por módulo. Al agregar/quitar un valor:
- *  1. PermissionBootstrap lo crea en BD en el siguiente arranque.
- *  2. RolePermissionBootstrap (self-healing) reasigna los permisos de cada rol.
+ *  1. PermissionBootstrap lo inserta en BD en el siguiente arranque (solo añade
+ *     los que faltan; nunca borra ni toca los existentes).
+ *  2. ⚠️ RolePermissionBootstrap ya NO es self-healing (decisión 2026-09-17):
+ *     solo siembra permisos a los roles base cuando NO tienen ninguno. Si creas
+ *     un permiso nuevo que ADMIN/cajero/almacenista deban tener, asígnalo a mano
+ *     desde la pantalla de Roles (o borra las asignaciones del rol para que el
+ *     seed las vuelva a crear).
  *  3. Verificar que el frontend tenga la ruta/guard correspondiente si es nuevo.
  *
- * <p>NOTA: VER_CLIENTES y VER_FACTURAS no tienen endpoints en el backend aún,
- * pero el frontend los usa como guard de rutas para /clientes y /facturas
- * (módulos placeholder planificados).
+ * <p>NOTA: los módulos de clientes y facturas se descartaron (decisión 2026-09-17),
+ * por eso ya  no existen VER_CLIENTES / VER_FACTURAS. La caja sigue activa para
+ * el POS (VER_CAJA, ABRIR_CAJA, CERRAR_CAJA, CORTE_CAJA).
  */
 public enum PermissionName {
     //Compras (módulo completo: ver, registrar y cancelar compras)
@@ -31,9 +36,6 @@ public enum PermissionName {
     CREAR_PRODUCTOS,
     EDITAR_PRODUCTOS,
     ELIMINAR_PRODUCTOS,
-
-    //Clientes (usado por frontend guard en /clientes — módulo pendiente)
-    VER_CLIENTES,
 
     //Usuarios
     VER_USUARIOS,
@@ -66,9 +68,6 @@ public enum PermissionName {
 
     //Reportes
     VER_REPORTES,
-
-    //Facturas (usado por frontend guard en /facturas — módulo pendiente)
-    VER_FACTURAS,
 
     //Pagos
     PROCESAR_PAGOS
