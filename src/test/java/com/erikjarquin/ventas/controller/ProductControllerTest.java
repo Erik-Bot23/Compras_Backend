@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -169,5 +170,59 @@ class ProductControllerTest {
         mockMvc.perform(get("/api/products/barcode/no-existe"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404));
+    }
+
+    @Test
+    @WithMockUser(authorities = "VER_PRODUCTOS")
+    void listarProductosDadosDeBaja_llamaGetInactive() throws Exception {
+        ProductDto inactivo = producto();
+        inactivo.setActive(false);
+        inactivo.setHasHistory(true);
+        when(productService.getInactive()).thenReturn(List.of(inactivo));
+
+        mockMvc.perform(get("/api/products/inactive"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(10L))
+                .andExpect(jsonPath("$[0].active").value(false))
+                .andExpect(jsonPath("$[0].hasHistory").value(true));
+
+        verify(productService).getInactive();
+    }
+
+    @Test
+    @WithMockUser(authorities = "DESACTIVAR_PRODUCTOS")
+    void darDeBajaProducto_devuelveProductoInactivo() throws Exception {
+        ProductDto inactivo = producto();
+        inactivo.setActive(false);
+        inactivo.setHasHistory(true);
+        when(productService.deactivate(10L)).thenReturn(inactivo);
+
+        mockMvc.perform(patch("/api/products/10/deactivate"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.active").value(false));
+
+        verify(productService).deactivate(10L);
+    }
+
+    @Test
+    @WithMockUser(authorities = "ACTIVAR_PRODUCTOS")
+    void reactivarProducto_devuelveProductoActivo() throws Exception {
+        when(productService.activate(10L)).thenReturn(producto());
+
+        mockMvc.perform(patch("/api/products/10/active"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.active").value(true));
+
+        verify(productService).activate(10L);
+    }
+
+    @Test
+    @WithMockUser(authorities = "VER_PRODUCTOS")
+    void darDeBajaProducto_sinPermiso_devuelve403() throws Exception {
+        //Con solo VER_PRODUCTOS no se puede dar de baja (falta DESACTIVAR_PRODUCTOS).
+        mockMvc.perform(patch("/api/products/10/deactivate"))
+                .andExpect(status().isForbidden());
+
+        verify(productService, never()).deactivate(anyLong());
     }
 }

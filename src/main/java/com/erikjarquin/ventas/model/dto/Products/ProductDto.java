@@ -15,6 +15,15 @@ public class ProductDto {
     private String sku;
     private String barcode;
 
+    //Estado del producto: false = "dado de baja" (borrado lógico). El frontend
+    //lo usa para pintar el badge "De baja" y los botones Dar de baja/Reactivar.
+    private boolean active = true;
+
+    //true si el producto ya tiene ventas o compras asociadas. En ese caso NO se
+    //puede eliminar definitivamente (rompería el histórico) y solo se puede dar
+    //de baja. Campo CALCULADO (no es columna) que llena ProductImpl.
+    private boolean hasHistory;
+
     //Constructor vacío
     public ProductDto(){}
 
@@ -105,5 +114,23 @@ public class ProductDto {
 
     public void setBarcode(String barcode){
         this.barcode=barcode;
+    }
+
+    //Getter y setter de active (borrado lógico: false = dado de baja)
+    public boolean isActive(){
+        return active;
+    }
+
+    public void setActive(boolean active){
+        this.active=active;
+    }
+
+    //Getter y setter de hasHistory (true = tiene ventas/compras → no borrable)
+    public boolean isHasHistory(){
+        return hasHistory;
+    }
+
+    public void setHasHistory(boolean hasHistory){
+        this.hasHistory=hasHistory;
     }
 }

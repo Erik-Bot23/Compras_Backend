@@ -56,6 +56,17 @@ public class ProductEntity {
     @Column(unique = true)
     private String sku;
 
+    /**
+     * Borrado lógico: false = producto "dado de baja". Un producto dado de baja
+     * NO se borra de la BD (así conserva el histórico de ventas/compras que lo
+     * referencian) y deja de aparecer en el catálogo del POS y en las ventas
+     * nuevas. Se puede reactivar volviendo a active=true.
+     * {@code columnDefinition = "boolean default true"} asegura que las filas
+     * preexistentes queden activas al aplicar el ddl-auto=update.
+     */
+    @Column(nullable = false, columnDefinition = "boolean default true")
+    private boolean active = true;
+
     public ProductEntity(){}
 
     //getter y setter de id
@@ -137,6 +148,15 @@ public class ProductEntity {
 
     public void setSku(String sku){
         this.sku=sku;
+    }
+
+    //Getter y setter de active (borrado lógico: false = dado de baja)
+    public boolean isActive(){
+        return active;
+    }
+
+    public void setActive(boolean active){
+        this.active=active;
     }
 }
 

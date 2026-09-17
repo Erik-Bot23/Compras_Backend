@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -23,7 +24,8 @@ import com.erikjarquin.ventas.service.ProductService;
  * CRUD de productos (multipart para la imagen) y búsquedas.
  *
  * <p>Permisos requeridos: VER_PRODUCTOS (listar/buscar), CREAR_PRODUCTOS,
- * EDITAR_PRODUCTOS, ELIMINAR_PRODUCTOS.
+ * EDITAR_PRODUCTOS, ELIMINAR_PRODUCTOS (borrado real, solo sin histórico),
+ * DESACTIVAR_PRODUCTOS y ACTIVAR_PRODUCTOS (borrado/alta lógica).
  *
  * <p>Nota CORS: el origen permitido se define globalmente en SecurityConfig
  * (propiedad ${CORS_ALLOWED_ORIGINS}); por eso aquí ya NO hay @CrossOrigin.
@@ -84,6 +86,27 @@ public class ProductController {
     public ResponseEntity<Void> deleteProduct(@PathVariable Long id){
         service.delete(id);
         return ResponseEntity.noContent().build();
+    }
+
+    //Listar los productos dados de baja (borrado lógico)
+    @PreAuthorize("hasAuthority('VER_PRODUCTOS')")
+    @GetMapping("/inactive")
+    public List<ProductDto> getInactiveProducts(){
+        return service.getInactive();
+    }
+
+    //Dar de baja un producto (soft delete: active=false, se conserva el histórico)
+    @PreAuthorize("hasAuthority('DESACTIVAR_PRODUCTOS')")
+    @PatchMapping("/{id}/deactivate")
+    public ProductDto deactivateProduct(@PathVariable Long id){
+        return service.deactivate(id);
+    }
+
+    //Reactivar un producto dado de baja (active=true)
+    @PreAuthorize("hasAuthority('ACTIVAR_PRODUCTOS')")
+    @PatchMapping("/{id}/active")
+    public ProductDto activateProduct(@PathVariable Long id){
+        return service.activate(id);
     }
 
     //Buscar productos con el código de barras

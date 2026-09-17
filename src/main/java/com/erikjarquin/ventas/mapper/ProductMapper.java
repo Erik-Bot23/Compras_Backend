@@ -23,7 +23,20 @@ public class ProductMapper {
         this.uploadUrl = uploadUrl;
     }
 
+    /**
+     * Mapeo simple (sin historial): hasHistory queda en false. Se usa en alta,
+     * edición y búsquedas por código (contextos donde no importa el historial).
+     */
     public ProductDto toDto(ProductEntity entity){
+        return toDto(entity, false);
+    }
+
+    /**
+     * Mapeo completo: además del estado {@code active} (borrado lógico) marca
+     * {@code hasHistory} para que el frontend sepa si el producto se puede
+     * eliminar definitivamente (sin historial) o solo dar de baja (con él).
+     */
+    public ProductDto toDto(ProductEntity entity, boolean hasHistory){
         if(entity==null) return null;
 
         ProductDto dto = new ProductDto();
@@ -41,6 +54,9 @@ public class ProductMapper {
 
         dto.setSku(entity.getSku());
         dto.setBarcode(entity.getBarcode());
+        //Estado de baja (soft delete) y si tiene ventas/compras asociadas.
+        dto.setActive(entity.isActive());
+        dto.setHasHistory(hasHistory);
 
         return dto;
     }

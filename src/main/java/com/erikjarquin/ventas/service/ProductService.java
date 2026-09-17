@@ -41,6 +41,16 @@ public interface ProductService {
     );
 
     void delete(Long id);
+
+    //Listar SOLO los productos dados de baja (active=false)
+    List<ProductDto> getInactive();
+
+    //Dar de baja un producto (borrado lógico: active=false, sin borrar la fila)
+    ProductDto deactivate(Long id);
+
+    //Reactivar un producto dado de baja (active=true)
+    ProductDto activate(Long id);
+
     //Buscar por código de barras
     ProductDto findByBarcode(String barcode);
     //Acción de buscador

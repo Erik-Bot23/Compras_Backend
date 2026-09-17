@@ -17,8 +17,8 @@
 
 Capas: `controller/ → service/ (interfaz) → service/impl/ → repository/ → model/entity/`. DTOs en `model/dto/`, Mappers en `mapper/` (algunos estáticos, otros `@Component`), config en `config/`, excepciones en `exceptions/`.
 
-- **12 controllers, 54 endpoints** (`/api/...`)
-- Autorización por permiso vía `@PreAuthorize("hasAuthority('...')")` (**32 permisos** en `PermissionName`)
+- **12 controllers, 57 endpoints** (`/api/...`)
+- Autorización por permiso vía `@PreAuthorize("hasAuthority('...')")` (**34 permisos** en `PermissionName`; ver borrado lógico de productos 2026-09-17 (3))
 - 4 `CommandLineRunner` de bootstrap (orden): `RoleBootstrap` → `AdminBootstrap` → `PermissionBootstrap` → `RolePermissionBootstrap`. Todos respetan el flag `app.seed-bootstraps` (`APP_SEED_BOOTSTRAPS`, default `true`) y siembran **solo si está vacío** (NO self-healing; ver 2026-09-17 (2)).
 - Admin inicial: `18jarquinsanchezerik1a@gmail.com` / `1234`
 
@@ -30,7 +30,7 @@ Capas: `controller/ → service/ (interfaz) → service/impl/ → repository/ �
 | Users | `/api/users` | CRUD + `PATCH /{id}/active` |
 | Roles | `/api/roles` | CRUD |
 | Permissions | `/api/permissions` | GET all |
-| Products | `/api/products` | CRUD multipart, `/barcode/{bc}`, `/search?q=`, `?category=` |
+| Products | `/api/products` | CRUD multipart, `/barcode/{bc}`, `/search?q=`, `?category=`, `/inactive`, `PATCH /{id}/deactivate`, `PATCH /{id}/active` |
 | Categories | `/api/categories` | CRUD |
 | Sales | `/api/sales` | POST (efectivo/transit/tarjeta), GET |
 | Payments | `/api/payments` | card, status/{tx}, retry/{id}, reverse/{id} |
@@ -49,6 +49,23 @@ Capas: `controller/ → service/ (interfaz) → service/impl/ → repository/ �
 - **Compras**: módulo completo (ver sesión 2026-09-13 (2)). Proveedores (CRUD, RFC único) + compras con renglones que al registrarse SUMAN stock y guardan el costo real del producto; cancelación revierte stock. `margins` (costo real vs precio) en reportes.
 
 ## Registro de cambios / decisiones
+
+### 2026-09-17 (3) — Borrado lógico de productos (dar de baja / reactivar)
+
+> Objetivo: un producto con ventas/compras NO se puede borrar (409, FK). Ahora se
+> puede "dar de baja" (soft delete) para sacarlo del catálogo conservando el
+> histórico, y "reactivar" después. Mismo patrón que `UserEntity.active`.
+
+1. **`ProductEntity.active`** (`@Column(nullable=false, columnDefinition="boolean default true")`, default `true`): borrado lógico. `ddl-auto:update` agrega la columna y las filas existentes quedan activas por el default.
+2. **`ProductDto`**: nuevos campos `active` (estado) y `hasHistory` (calculado, no columna). El frontend los usa para pintar el badge "De baja" y decidir entre Eliminar (sin histórico) o Dar de baja (con histórico).
+3. **`ProductMapper.toDto(entity)`** sigue existiendo y delega en el nuevo overload **`toDto(entity, boolean hasHistory)`**.
+4. **`ProductRepository`**: `findByActiveTrue()`, `findByActiveFalse()`, `findByCategory_NameAndActiveTrue(...)`; `search(q)` y `findLowStock(threshold)` ahora agregan `AND p.active = true` (el POS no muestra ni busca productos dados de baja). Se conserva `findByCategory_Name` (sin filtro). Nuevas `findProductIdsWithSales()` / `findProductIdsWithPurchases()` (JPQL `SELECT DISTINCT d.product.id`) → `hasHistory` se calcula con 2 consultas, evitando N+1 (`exists...` por producto).
+5. **`ProductService`/`ProductImpl`**: `getInactive()`, `deactivate(Long)` (`active=false`, conserva imagen), `activate(Long)` (`active=true`); `getAll()`/`getByCategory()` solo activos; `findByBarcode()` trata un inactivo como no encontrado (no se vende); `delete()` sigue siendo borrado FÍSICO y solo sin histórico (409 si lo tiene, ahora el mensaje sugiere dar de baja).
+6. **`ProductController`**: `GET /api/products/inactive` (`VER_PRODUCTOS`), `PATCH /api/products/{id}/deactivate` (`DESACTIVAR_PRODUCTOS`), `PATCH /api/products/{id}/active` (`ACTIVAR_PRODUCTOS`). Se usa **PATCH** porque `DELETE /{id}` ya es el borrado físico. Total: **57 endpoints**.
+7. **`PermissionName`**: 32 → **34** (`DESACTIVAR_PRODUCTOS`, `ACTIVAR_PRODUCTOS`). `PermissionBootstrap` los inserta solo; `RolePermissionBootstrap` NO es self-healing → en BD ya inicializada hay que asignarlos a mano desde la pantalla de Roles (a ALMACENISTA/roles que gestionen inventario).
+8. **⚠️ BD local**: igual que en 2026-09-13 (2), el `CHECK permissions_name_check` no se actualiza con `ddl-auto:update` y el arranque fallaba al insertar los 2 permisos nuevos. Se droppeó en `ventas_db` (`ALTER TABLE permissions DROP CONSTRAINT IF EXISTS permissions_name_check;`). En Railway BD nueva lo creará con los 34 nombres; en BD existente, dropear.
+9. **Tests**: nuevo `ProductImplTest` (8, Mockito: baja conserva imagen, baja repetida 409, reactivar, listar inactivos, listar activos usa `findByActiveTrue`, barcode inactivo no se encuentra, delete con histórico 409 sin borrar imagen, delete sin histórico borra imagen+fila) + 4 en `ProductControllerTest` (inactive, deactivate, activate, 403 sin permiso). **118 → 130 tests en verde**.
+10. **Pendiente (fase frontend)**: vista "Productos dados de baja" (los scaffolds `deactivated-products/` del frontend están vacíos) + botones Dar de baja/Reactivar conectados a los nuevos endpoints.
 
 ### 2026-09-17 (2) — Flag de seed + fin del self-healing + tests de controllers
 
@@ -131,7 +148,7 @@ Capas: `controller/ → service/ (interfaz) → service/impl/ → repository/ �
 
 - ⚠️ **Secretos en historial de git**: purgar con `git filter-repo` antes de publicar el repo.
 - **Imágenes**: sin perfil dev/prod separado en el frontend para `environment-prod.ts` (requiere definir la API de Railway al desplegar).
-- **Tests**: **118 en verde** (repos + servicios + file storage + 10 controllers WebMvc + bootstraps).
+- **Tests**: **130 en verde** (repos + servicios + file storage + 10 controllers WebMvc + bootstraps).
 - Frontend: módulos **Clientes y Facturas descartados** (permisos eliminados). `Caja` sigue como placeholder porque su "hoja de corte" vive hoy en Reportes. `reversePayment` del backend no tiene UI (requiere un listado/detalle de pagos).
 - ⚠️ **BD local**: el CHECK `permissions_name_check` (generado por Hibernate para `@Enumerated`) NO se actualiza con `ddl-auto:update`. Al agregar permisos al enum el arranque puede fallar con "viola la restricción check" → droppear el constraint en BD local (`ALTER TABLE permissions DROP CONSTRAINT permissions_name_check`) o usar BD nueva.
 - **Código pendiente**: falta cambiar `System.out.println` de los bootstraps por un logger. ⚠️ Al estar trabajando entre máquinas, un AGENTS.md desactualizado hizo que otra laptop recreara `pingController`; ya está eliminado de nuevo (ver sesión 2026-09-17) — no recrearlo.

@@ -1,7 +1,7 @@
 package com.erikjarquin.ventas.model.enums;
 
 /**
- * Catálogo de permisos (32). Cada nombre se usa en entidades PermissionEntity
+ * Catálogo de permisos (34). Cada nombre se usa en entidades PermissionEntity
  * (columna name) y en los @PreAuthorize("hasAuthority('...')") de los
  * controllers: el string debe coincidir EXACTAMENTE con el nombre del enum.
  *
@@ -36,6 +36,10 @@ public enum PermissionName {
     CREAR_PRODUCTOS,
     EDITAR_PRODUCTOS,
     ELIMINAR_PRODUCTOS,
+    //Borrado lógico de productos: quitarlo del catálogo sin perder el histórico
+    DESACTIVAR_PRODUCTOS,
+    //Volver a poner activo un producto dado de baja
+    ACTIVAR_PRODUCTOS,
 
     //Usuarios
     VER_USUARIOS,
