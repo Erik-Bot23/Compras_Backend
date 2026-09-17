@@ -25,9 +25,9 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
  * CORS limitado a los orígenes permitidos y autorización por PERMISO
  * mediante {@code @PreAuthorize} en cada controller.
  *
- * <p>Los endpoints públicos son: {@code OPTIONS /**} (preflight), {@code /ping}
- * (healthcheck), {@code /api/auth/**} (login/recuperación) y
- * {@code /api/uploads/**} (imágenes de productos).
+ * <p>Los endpoints públicos son: {@code OPTIONS /**} (preflight),
+ * {@code /api/auth/**} (login/recuperación) y {@code /api/uploads/**} (imágenes
+ * de productos).
  */
 @Configuration
 @EnableMethodSecurity
@@ -93,7 +93,7 @@ public class SecurityConfig {
      * Cadena de filtros de Spring Security:
      *  1. CSRF desactivado (API stateless con JWT).
      *  2. CORS habilitado con la fuente configurada arriba.
-     *  3. Rutas públicas: OPTIONS (preflight), /ping, /api/auth/**, /api/uploads/**.
+     *  3. Rutas públicas: OPTIONS (preflight), /api/auth/**, /api/uploads/**.
      *  4. Cualquier otra ruta requiere autenticación (JWT).
      *  5. JwtFilter se ejecuta antes del filtro de usuario/contraseña estándar.
      */
@@ -104,7 +104,6 @@ public class SecurityConfig {
                 .cors(Customizer.withDefaults())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/ping").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/uploads/**").permitAll()
                         .anyRequest().authenticated())

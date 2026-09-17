@@ -17,7 +17,7 @@
 
 Capas: `controller/ → service/ (interfaz) → service/impl/ → repository/ → model/entity/`. DTOs en `model/dto/`, Mappers en `mapper/` (algunos estáticos, otros `@Component`), config en `config/`, excepciones en `exceptions/`.
 
-- **13 controllers, 54 endpoints** (`/api/...`)
+- **12 controllers, 54 endpoints** (`/api/...`)
 - Autorización por permiso vía `@PreAuthorize("hasAuthority('...')")` (**34 permisos** en `PermissionName`)
 - 4 `CommandLineRunner` de bootstrap (orden): `RoleBootstrap` → `AdminBootstrap` → `PermissionBootstrap` → `RolePermissionBootstrap`
 - Admin inicial: `18jarquinsanchezerik1a@gmail.com` / `1234`
@@ -39,7 +39,6 @@ Capas: `controller/ → service/ (interfaz) → service/impl/ → repository/ �
 | Cash | `/api/cash` | open, close, summary, active |
 | Reports | `/api/reports` | trend, top-products, payment-methods, categories, low-stock, **margins**, summary (todas con `VER_REPORTES`) |
 | Uploads | `/api/uploads/**` | **Público** — sirve imágenes de productos |
-| — | `GET /ping` | healthcheck (sin prefijo) |
 
 ## Estado de módulos
 
@@ -50,6 +49,12 @@ Capas: `controller/ → service/ (interfaz) → service/impl/ → repository/ �
 - **Compras**: módulo completo (ver sesión 2026-09-13 (2)). Proveedores (CRUD, RFC único) + compras con renglones que al registrarse SUMAN stock y guardan el costo real del producto; cancelación revierte stock. `margins` (costo real vs precio) en reportes.
 
 ## Registro de cambios / decisiones
+
+### 2026-09-17 — Eliminado `GET /ping` + limpieza de referencias
+
+1. **`pingController` eliminado** (`controller/pingController.java`): otro equipo lo recreó (siguió instrucciones de una sesión vieja de este archivo) pero el proyecto NO lo necesita. El borrado afecta: contadores (eran "13 controllers" → **12**) y la fila `GET /ping` de la tabla de endpoints (quitada).
+2. **Limpieza en `SecurityConfig`**: quitado `.requestMatchers("/ping").permitAll()` y las referencias a `/ping` en javadoc/comentarios. Rutas públicas ahora: `OPTIONS /**`, `/api/auth/**`, `/api/uploads/**`.
+3. ⚠️ **No usar `/ping` como healthcheck de Railway** (ya no existe). Opciones: quitar el healthcheck custom o apuntarlo a un endpoint público (`/api/auth/...`) — ver pasos de deploy abajo.
 
 ### 2026-09-15 — Corrección FK en borrados + bloqueo productos con histórico
 
@@ -118,7 +123,7 @@ Capas: `controller/ → service/ (interfaz) → service/impl/ → repository/ �
 - **Tests**: 35 en verde (repos + servicios + file storage); falta cobertura de controllers con Mockito/WebMvc.
 - Frontend: componentes `Ventas`, `Clientes`, `Facturas` son placeholders; `Caja` también (su "hoja de corte" vive hoy en Reportes). `reversePayment` del backend no tiene UI (requiere un listado/detalle de pagos).
 - ⚠️ **BD local**: el CHECK `permissions_name_check` (generado por Hibernate para `@Enumerated`) NO se actualiza con `ddl-auto:update`. Al agregar permisos al enum el arranque puede fallar con "viola la restricción check" → droppear el constraint en BD local (`ALTER TABLE permissions DROP CONSTRAINT permissions_name_check`) o usar BD nueva.
-- **Código pendiente**: `pingController` → renombrado a `PingController` (Hecho), `//` suelto en `CashRegisterController` (Hecho); falta cambiar `System.out.println` de los bootstraps por un logger. Está todo commiteado (git clean).
+- **Código pendiente**: falta cambiar `System.out.println` de los bootstraps por un logger; `//` suelto en `CashRegisterController` (corregido en otra sesión). ⚠️ Al estar trabajando entre máquinas, un AGENTS.md desactualizado hizo que otra laptop recreara `pingController`; ya está eliminado de nuevo (ver sesión 2026-09-17) — no recrearlo.
 
 ## Cómo ejecutar
 
@@ -136,7 +141,7 @@ Capas: `controller/ → service/ (interfaz) → service/impl/ → repository/ �
 5. **GlobalExceptionHandler** reescrito (400 validación/argumento, 401/403, 500). `CashException`/`UserException`/`PaymentException` llevan HttpStatus; runtime de negocio convertidos a 400/404/409 en User/Cash/Product; `ErrorResponse` (no usado) eliminado.
 6. **Imágenes seguras**: `FileStorageService` valida tamaño 5MB + extensión + magic bytes; `ProductMapper` sigue devolviendo URL completa.
 7. **`TerminalPhysicalImpl`**: bug corregido — REV/STS ahora sí se envían por el socket. `TestCardRepository` tiene javadoc de "solo prueba".
-8. **`GET /ping`** creado (`controller/pingController.java`, público) — antes no existía pese a lo que decía este archivo.
+8. **`GET /ping`** creado (`controller/pingController.java`, público) — antes no existía pese a lo que decía este archivo. ⚠️ **Eliminado después** (ver sesión 2026-09-17): ya no se necesita como healthcheck.
 9. **Dockerfile multi-etapa** (build maven → jre21), `server.port=${PORT:8081}`; `.dockerignore`/`.gitignore` actualizados con `uploads/` fuera del repo. (Este `AGENTS.md` es un archivo de contexto del proyecto y SÍ se sube a git para llevar el historial de decisiones entre máquinas.)
 10. Comentariados: controllers, bootstraps, interfaces, impls, servicios de config, entidades, mappers, repos, enums.
 11. **`mvn compile` verificado OK**. NADA commiteado aún. Secretos previos siguen en el historial de git → **purgar con `git filter-repo` antes de publicar el repo**. `PaymentMonitorJob` movido a paquete `jobs/`.
@@ -187,7 +192,7 @@ Capas: `controller/ → service/ (interfaz) → service/impl/ → repository/ �
   3. **Variables** (sin defaults → obligatorias): `DB_USER`, `DB_PASSWORD`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `JWT_SECRET` (generar con `openssl rand -base64 48`), `ADMIN_EMAIL`, `ADMIN_PASSWORD` (robusta), `PAYMENT_MERCHANT_ID`, `PAYMENT_TERMINAL_ID`, `PAYMENT_KEYSTORE_PASSWORD`. Con default ajustable: `CORS_ALLOWED_ORIGINS=https://<app>.netlify.app`, `FRONTEND_URL=https://<app>.netlify.app`, `UPLOAD_DIR=/app/uploads`, `UPLOAD_URL=https://<backend>.up.railway.app/api/uploads`, `JPA_DDL_AUTO=update` (usar `validate` en prod madura), `SHOW_SQL=false`, `PAYMENT_TERMINAL_TYPE=SIMULATED` (o `PHYSICAL` con host/keystore).
   4. **Postgres**: Railway Postgres (no usar el local). `DB_HOST`/`DB_PORT` serán los del servicio Postgres.
   5. **Volumen**: service → Volumes → create volume montado en `/app/uploads` (UID 1001).
-  6. **Healthcheck de Railway**: HTTP GET a `https://<backend>/ping` (deploy settings), no TCP en puerto.
+  6. **Healthcheck de Railway**: ⚠️ `/ping` YA NO EXISTE (eliminado en 2026-09-17). Quita el healthcheck HTTP custom o apúntalo a un endpoint público como `GET /api/auth/me` (responde sin token con 401/403 pero confirma que la app está viva).
   7. **HTTPS**: el dominio `*.up.railway.app` trae HTTPS automático; el frontend Netlify usa la URL https del backend.
 - Frontend Angular (Netlify): definir en `environment.prod.ts` la API = `https://<backend>.up.railway.app/api`.
 - Purgar historial de git (secrets + uploads), iniciar repo limpio y commitear.

@@ -41,8 +41,6 @@ USER appuser
 # Copia únicamente el jar generado en la etapa build.
 COPY --from=build /build/target/*.jar app.jar
 
-# Railway usa su propio HEALTHCHECK opcional; /ping está marcado público
-# (configura el healthcheck de Railway como HTTP GET https://<host>/ping).
 EXPOSE 8081
 
 # El puerto real lo define $PORT en Railway (application.yaml: server.port=${PORT:8081}).
