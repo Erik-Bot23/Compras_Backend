@@ -20,7 +20,7 @@ import jakarta.servlet.http.HttpServletResponse;
 /**
  * Filtro JWT que intercepta CADA request antes de llegar al controller.
  *
- * <p>FLUJO DE AUTENTICACIÓN en esta API (de arriba a abajo):
+ * FLUJO DE AUTENTICACIÓN en esta API (de arriba a abajo):
  *  1. El cliente envía {@code Authorization: Bearer <token>} en el header.
  *  2. Este filtro (antes de UsernamePasswordAuthenticationFilter):
  *     a. Extrae el token del header.
@@ -31,10 +31,10 @@ import jakarta.servlet.http.HttpServletResponse;
  *  3. A partir de aquí, cualquier {@code @PreAuthorize} puede verificar
  *     permisos vía {@code hasAuthority("CREAR_VENTAS")}.
  *
- * <p>Si NO hay header o el token está expirado/inválido, el request pasa sin
+ * Si NO hay header o el token está expirado/inválido, el request pasa sin
  * autenticación y los endpoints protegidos retornan 401/403 normalmente.
  *
- * <p>PERMISOS vs ROL: los permisos se cargan SIEMPRE desde la BD (no del JWT),
+ * PERMISOS vs ROL: los permisos se cargan SIEMPRE desde la BD (no del JWT),
  * así que si quitas un permiso a un rol, el cambio aplica de inmediato sin
  * esperar la expiración del token (el JWT solo almacena el email del usuario).
  */
