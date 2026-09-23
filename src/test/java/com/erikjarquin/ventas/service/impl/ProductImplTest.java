@@ -1,4 +1,4 @@
-package com.erikjarquin.test.service.impl;
+package com.erikjarquin.ventas.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -25,7 +25,6 @@ import com.erikjarquin.ventas.model.entity.ProductEntity;
 import com.erikjarquin.ventas.repository.CategoryRepository;
 import com.erikjarquin.ventas.repository.ProductRepository;
 import com.erikjarquin.ventas.service.FileStorageService;
-import com.erikjarquin.ventas.service.impl.ProductImpl;
 
 /**
  * Tests unitarios de ProductImpl (Mockito, sin BD) centrados en el BORRADO

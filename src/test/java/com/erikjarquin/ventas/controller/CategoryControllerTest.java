@@ -1,4 +1,4 @@
-package com.erikjarquin.test.controller;
+package com.erikjarquin.ventas.controller;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -29,7 +29,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.erikjarquin.ventas.config.JwtUtil;
 import com.erikjarquin.ventas.config.SecurityConfig;
 import com.erikjarquin.ventas.config.security.SecurityAuthorityMapper;
-import com.erikjarquin.ventas.controller.CategoryController;
 import com.erikjarquin.ventas.exceptions.CategoryException;
 import com.erikjarquin.ventas.model.dto.Categories.CategoryDto;
 import com.erikjarquin.ventas.repository.UserRepository;

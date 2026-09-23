@@ -1,4 +1,4 @@
-package com.erikjarquin.test.repository;
+package com.erikjarquin.ventas.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -18,9 +18,6 @@ import com.erikjarquin.ventas.model.entity.SaleDetailEntity;
 import com.erikjarquin.ventas.model.entity.SaleEntity;
 import com.erikjarquin.ventas.model.enums.PaymentMethod;
 import com.erikjarquin.ventas.model.enums.PaymentStatus;
-import com.erikjarquin.ventas.repository.CategoryRepository;
-import com.erikjarquin.ventas.repository.ProductRepository;
-import com.erikjarquin.ventas.repository.SaleRepository;
 
 /**
  * Tests de las consultas agregadas de REPORTES sobre H2 en memoria.

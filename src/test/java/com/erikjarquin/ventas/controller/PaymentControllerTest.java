@@ -1,4 +1,4 @@
-package com.erikjarquin.test.controller;
+package com.erikjarquin.ventas.controller;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -25,7 +25,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.erikjarquin.ventas.config.JwtUtil;
 import com.erikjarquin.ventas.config.SecurityConfig;
 import com.erikjarquin.ventas.config.security.SecurityAuthorityMapper;
-import com.erikjarquin.ventas.controller.PaymentController;
 import com.erikjarquin.ventas.exceptions.PaymentException;
 import com.erikjarquin.ventas.model.dto.Payment.CardPaymentResponse;
 import com.erikjarquin.ventas.model.enums.PaymentStatus;

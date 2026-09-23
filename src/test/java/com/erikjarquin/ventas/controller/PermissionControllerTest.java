@@ -1,4 +1,4 @@
-package com.erikjarquin.test.controller;
+package com.erikjarquin.ventas.controller;
 
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -20,7 +20,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.erikjarquin.ventas.config.JwtUtil;
 import com.erikjarquin.ventas.config.SecurityConfig;
 import com.erikjarquin.ventas.config.security.SecurityAuthorityMapper;
-import com.erikjarquin.ventas.controller.PermissionController;
 import com.erikjarquin.ventas.model.dto.Permissions.PermissionResponse;
 import com.erikjarquin.ventas.repository.UserRepository;
 import com.erikjarquin.ventas.service.PermissionService;

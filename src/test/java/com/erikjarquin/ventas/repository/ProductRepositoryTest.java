@@ -1,4 +1,4 @@
-package com.erikjarquin.test.repository;
+package com.erikjarquin.ventas.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -13,8 +13,6 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 
 import com.erikjarquin.ventas.model.entity.CategoryEntity;
 import com.erikjarquin.ventas.model.entity.ProductEntity;
-import com.erikjarquin.ventas.repository.CategoryRepository;
-import com.erikjarquin.ventas.repository.ProductRepository;
 
 /**
  * Tests del repositorio de productos sobre H2 en memoria (no requiere Postgres).

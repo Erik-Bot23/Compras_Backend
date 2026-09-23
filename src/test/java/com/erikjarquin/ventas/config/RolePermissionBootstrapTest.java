@@ -1,4 +1,4 @@
-package com.erikjarquin.test.config;
+package com.erikjarquin.ventas.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -18,7 +18,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import com.erikjarquin.ventas.config.RolePermissionBootstrap;
 import com.erikjarquin.ventas.model.entity.PermissionEntity;
 import com.erikjarquin.ventas.model.entity.RoleEntity;
 import com.erikjarquin.ventas.model.enums.PermissionName;

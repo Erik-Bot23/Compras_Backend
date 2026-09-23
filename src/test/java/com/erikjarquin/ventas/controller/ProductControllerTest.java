@@ -1,4 +1,4 @@
-package com.erikjarquin.test.controller;
+package com.erikjarquin.ventas.controller;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -31,7 +31,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.erikjarquin.ventas.config.JwtUtil;
 import com.erikjarquin.ventas.config.SecurityConfig;
 import com.erikjarquin.ventas.config.security.SecurityAuthorityMapper;
-import com.erikjarquin.ventas.controller.ProductController;
 import com.erikjarquin.ventas.exceptions.ProductException;
 import com.erikjarquin.ventas.model.dto.Products.ProductDto;
 import com.erikjarquin.ventas.repository.UserRepository;

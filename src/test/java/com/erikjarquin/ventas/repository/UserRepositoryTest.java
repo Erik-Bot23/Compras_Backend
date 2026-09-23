@@ -1,4 +1,4 @@
-package com.erikjarquin.test.repository;
+package com.erikjarquin.ventas.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -15,9 +15,6 @@ import com.erikjarquin.ventas.model.entity.PermissionEntity;
 import com.erikjarquin.ventas.model.entity.RoleEntity;
 import com.erikjarquin.ventas.model.entity.UserEntity;
 import com.erikjarquin.ventas.model.enums.PermissionName;
-import com.erikjarquin.ventas.repository.PermissionRepository;
-import com.erikjarquin.ventas.repository.RoleRepository;
-import com.erikjarquin.ventas.repository.UserRepository;
 
 /**
  * Tests del repositorio de usuarios sobre H2 en memoria (no requiere Postgres).

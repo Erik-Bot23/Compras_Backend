@@ -32,8 +32,14 @@ spring:
     default: local
 
   datasource:
-    # Host, puerto y nombre de BD NO son secretos → tienen default. Usuario y
-    # clave vienen de ${DB_USER} / ${DB_PASSWORD} (local o Railway).
+    # Host, puerto y nombre de BD NO son secretos → tienen default LOCAL. Usuario
+    # y clave vienen de ${DB_USER} / ${DB_PASSWORD} (en application-local.yaml o
+    # en las variables de entorno de Railway/Supabase).
+    #
+    # CAMBIAR DE LOCAL A SUPABASE (edita application-local.yaml, no este archivo):
+    #   DB_HOST=<host del Dashboard>  DB_PORT=5432  DB_NAME=postgres
+    #   DB_USER=postgres  DB_PASSWORD=<password real>  DB_SSLMODE=require
+    # Los defaults de aquí (localhost/compras_db/disable) son SOLO para local.
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:compras_db}?sslmode=${DB_SSLMODE:disable}
     username: ${DB_USER}
     password: ${DB_PASSWORD}
@@ -46,9 +52,12 @@ spring:
 
   jpa:
     hibernate:
-      # update (dev): crea/actualiza tablas automáticamente. Para producción real
-      # usar "validate" → Hibernate NO modifica el esquema, solo lo valida.
-      ddl-auto: ${JPA_DDL_AUTO:validate} #update
+      # update (dev local): Hibernate crea/actualiza las tablas automáticamente
+      # (comodo mientras construyes el esquema). En SUPABASE/PRODUCCIÓN cambiar
+      # a "validate": las tablas las crea SOLO Flyway (V1__init.sql) y Hibernate
+      # nada más valida que coinciden → define JPA_DDL_AUTO=validate en el entorno.
+      #   Local   : JPA_DDL_AUTO=update (default)  ·  Supabase: JPA_DDL_AUTO=validate
+      ddl-auto: ${JPA_DDL_AUTO:update} #validate
     # false en producción (evita exponer SQL con datos en logs).
     # true por defecto para tu desarrollo local.
     show-sql: ${SHOW_SQL:true}

@@ -1,4 +1,4 @@
-package com.erikjarquin.test.repository;
+package com.erikjarquin.ventas.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -15,9 +15,6 @@ import com.erikjarquin.ventas.model.entity.ProductEntity;
 import com.erikjarquin.ventas.model.entity.ProviderEntity;
 import com.erikjarquin.ventas.model.entity.PurchaseDetailEntity;
 import com.erikjarquin.ventas.model.entity.PurchaseEntity;
-import com.erikjarquin.ventas.repository.ProductRepository;
-import com.erikjarquin.ventas.repository.ProviderRepository;
-import com.erikjarquin.ventas.repository.PurchaseRepository;
 
 /**
  * Tests de los repositorios del m\u00f3dulo de COMPRAS sobre H2 en memoria.

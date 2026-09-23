@@ -1,4 +1,4 @@
-package com.erikjarquin.test.service;
+package com.erikjarquin.ventas.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -11,8 +11,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.mock.web.MockMultipartFile;
-
-import com.erikjarquin.ventas.service.FileStorageService;
 
 /**
  * Tests de FileStorageService (validacion de imagenes) con un directorio
