@@ -1,4 +1,4 @@
-package com.erikjarquin.ventas.controller;
+package com.erikjarquin.test.controller;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
@@ -23,6 +23,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.erikjarquin.ventas.config.JwtUtil;
 import com.erikjarquin.ventas.config.SecurityConfig;
 import com.erikjarquin.ventas.config.security.SecurityAuthorityMapper;
+import com.erikjarquin.ventas.controller.CashRegisterController;
 import com.erikjarquin.ventas.exceptions.CashException;
 import com.erikjarquin.ventas.model.dto.Cash.CashResponse;
 import com.erikjarquin.ventas.model.dto.Cash.CashSummaryResponse;

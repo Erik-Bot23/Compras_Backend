@@ -44,11 +44,14 @@ spring:
       max-file-size: 20MB
       max-request-size: 20MB
 
+  flyway:
+    enabled: false # Los tests no corren migraciones ni las buscan
+
   jpa:
     hibernate:
       # update (dev): crea/actualiza tablas automáticamente. Para producción real
       # usar "validate" → Hibernate NO modifica el esquema, solo lo valida.
-      ddl-auto: ${JPA_DDL_AUTO:validate} #update
+      ddl-auto: create-drop
     # false en producción (evita exponer SQL con datos en logs).
     # true por defecto para tu desarrollo local.
     show-sql: ${SHOW_SQL:true}

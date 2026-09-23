@@ -1,4 +1,4 @@
-package com.erikjarquin.ventas.service.impl;
+package com.erikjarquin.test.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -27,6 +27,7 @@ import com.erikjarquin.ventas.model.entity.PurchaseEntity;
 import com.erikjarquin.ventas.repository.ProductRepository;
 import com.erikjarquin.ventas.repository.ProviderRepository;
 import com.erikjarquin.ventas.repository.PurchaseRepository;
+import com.erikjarquin.ventas.service.impl.PurchaseImpl;
 
 /**
  * Tests unitarios de PurchaseImpl (Mockito, sin BD): verifican la REGLA DE

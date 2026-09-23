@@ -1,4 +1,4 @@
-package com.erikjarquin.ventas;
+package com.erikjarquin.test;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
