@@ -51,6 +51,158 @@ Capas: `controller/ → service/ (interfaz) → service/impl/ → repository/ �
 
 ## Registro de cambios / decisiones
 
+### 2026-09-28 — 📋 PLAN (NO IMPLEMENTADO): SKU / Barcode duplicado → 409 con mensaje
+
+> **Estado: solo es un plan.** No se escribió código. Se documenta aquí para poder
+> retomarlo en otra máquina. Contraparte en el frontend: `Compras-Frontend-Local/AGENTS.md`
+> (misma fecha, misma sección).
+
+**Problema confirmado por auditoría del código (no era suposición):** hoy un SKU o
+barcode duplicado produce **HTTP 500 "Ocurrió un error interno en el servidor"** y
+el usuario no ve nada. La cadena:
+
+1. `ProductEntity.java:53-57` → `@Column(unique = true)` en `barcode` y `sku`.
+2. `V1__init.sql:568` (`UNIQUE (sku)`) y `:613` (`UNIQUE (barcode)`) → los
+   constraints existen en PostgreSQL.
+3. `ProductRepository` **NO tiene** `existsBySku` / `existsByBarcode`.
+4. `ProductImpl.java:95-96` (save) y `:124-125` (update) hacen
+   `entity.setSku(sku)` a ciegas, sin verificar.
+5. El `UNIQUE` revienta en `repository.save()` → Hibernate →
+   `DataIntegrityViolationException`.
+6. `GlobalExceptionHandler` **NO tiene handler** para `DataIntegrityViolationException`
+   → cae en el catch-all (`:226-231`) → 500 genérico.
+
+`ProductEntity` es la **única** entidad con columna `unique = true` que no tiene
+chequeo de duplicados en el service. Todos los demás módulos sí lo tienen
+(`ProviderImpl`, `CategoryImpl`, `UserImpl`, `RoleImpl`).
+
+**Solución-planeada: 4 archivos.**
+
+1. **`repository/ProductRepository.java`** — 4 métodos nuevos (el repo solo tiene `findByBarcode`):
+
+```java
+    //=== CONTROL DE DUPLICADOS ==========================================
+    //sku y barcode son UNIQUE en BD (V1__init.sql). Permiten detectar el
+    //duplico ANTES de que reviente el constraint → 409 en vez de 500.
+    boolean existsBySku(String sku);
+    //Variante para update: ignora al propio producto (si no, editar sin
+    //cambiar el SKU se detectaría a sí mismo → falso positivo).
+    boolean existsBySkuAndIdNot(String sku, Long id);
+    boolean existsByBarcode(String barcode);
+    boolean existsByBarcodeAndIdNot(String barcode, Long id);
+```
+
+2. **`service/impl/ProductImpl.java`** — 2 helpers privados:
+
+```java
+    //Si el usuario no escribió nada se guarda como null. IMPORTANTE: "" también
+    //es un valor UNIQUE, así que dejarlo como cadena vacía haría que el SEGUNDO
+    //producto sin SKU chocara con el primero (y PostgreSQL sí permite varios NULL).
+    private String normalizeCode(String value){
+        return (value == null || value.isBlank()) ? null : value.trim();
+    }
+
+    //409 si el sku o barcode ya pertenecen a OTRO producto. id == null → creando.
+    private void validateDuplicates(Long id, String sku, String barcode){
+        String s = normalizeCode(sku);
+        String b = normalizeCode(barcode);
+
+        if(s != null && (id == null
+                ? repository.existsBySku(s)
+                : repository.existsBySkuAndIdNot(s, id))){
+            throw new ProductException(
+                    "Ya existe un producto con el SKU '" + s + "'", HttpStatus.CONFLICT);
+        }
+
+        if(b != null && (id == null
+                ? repository.existsByBarcode(b)
+                : repository.existsByBarcodeAndIdNot(b, id))){
+            throw new ProductException(
+                    "Ya existe un producto con el código de barras '" + b + "'", HttpStatus.CONFLICT);
+        }
+    }
+```
+
+3. **`ProductImpl.save()`** (reemplazar las líneas 95-100) — la validación va
+   **ANTES** de `repository.save()`:
+
+```java
+        validateDuplicates(null, sku, barcode);
+        entity.setSku(normalizeCode(sku));
+        entity.setBarcode(normalizeCode(barcode));
+        entity.setImg(fileStorageService.store(image));
+        ProductEntity saved = repository.save(entity);
+```
+
+4. **`ProductImpl.update()`** (reemplazar las líneas 124-125) — se pasa el `id`
+   para auto-excluirse:
+
+```java
+        validateDuplicates(id, sku, barcode);
+        entity.setSku(normalizeCode(sku));
+        entity.setBarcode(normalizeCode(barcode));
+```
+
+5. **Red de seguridad — `exceptions/GlobalExceptionHandler.java`**: el chequeo del
+   service tiene una ventana de carrera (dos requests simultáneos con el mismo SKU
+   pueden pasar los dos checks y luego el constraint revienta igual). Agregar
+   handler **antes** del `@ExceptionHandler(Exception.class)` de la línea 226:
+
+```java
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
+        String raw = String.valueOf(ex.getMostSpecificCause().getMessage()).toLowerCase();
+        log.warn("Dato duplicado en BD: {}", raw);
+
+        String message;
+        if (raw.contains("sku")) {
+            message = "Ya existe un producto con ese SKU";
+        } else if (raw.contains("barcode")) {
+            message = "Ya existe un producto con ese código de barras";
+        } else {
+            message = "No se pudo guardar: el dato ya existe";
+        }
+
+        return buildErrorResponse(HttpStatus.CONFLICT, "PRODUCT_ERROR", message);
+    }
+```
+
+   (El mensaje de PostgreSQL trae `key (sku)=(...) already exists`, por eso el
+   `contains` funciona. Importar `org.springframework.dao.DataIntegrityViolationException`.)
+
+**No hace falta crear la excepción**: `ProductException(String, HttpStatus)` ya
+existe (`ProductException.java:20-23`, default 404) y `GlobalExceptionHandler.java:81-85`
+ya la traduce a 409 con `code: "PRODUCT_ERROR"`. Es el mismo patrón que
+`ProviderImpl.java:50-72` (RFC duplicado).
+
+**Test sugerido** (productos es el ÚNICO módulo sin test de duplicado; comparar con
+`ProviderControllerTest.java:103`, `CategoryControllerTest.java:153`,
+`UserControllerTest.java:97`):
+
+```java
+    @Test
+    void crearProducto_skuDuplicado_devuelve409() throws Exception {
+        when(categoryRepository.findById(1L)).thenReturn(Optional.of(categoria()));
+        when(productRepository.existsBySku("CAF-001")).thenReturn(true);
+
+        mockMvc.perform(multipart("/api/products")
+                        .param("name", "Café 1kg").param("price", "150.00")
+                        .param("stock", "5").param("categoryId", "1")
+                        .param("sku", "CAF-001").param("barcode", "7501234567890"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PRODUCT_ERROR"));
+    }
+```
+
+**⚠️ Conflicto con el roadmap**: `docs/PLAN.md:60` dice *"Producto → Platillo: se
+quita `barcode`/`sku` (o quedan opcionales, `null`)"*. Si ese refactor se hace,
+**todo este trabajo queda obsoleto**. Decidir antes de invertir. Si aun así se
+quiere dejar `sku`/`barcode` como opcionales (`null`), los `existsBy*` DEBEN
+saltarse los `null` (por eso `validateDuplicates` normaliza antes).
+
+**Nada de esto cambia endpoints ni permisos**: sigue siendo `POST /api/products`
+(200 en éxito) y ahora 409 en duplicado. Total sigue en **57 endpoints / 34 permisos**.
+
 ### 2026-09-23 — Migraciones Flyway + puntería a Supabase + "compras" como identidad
 
 > Objetivo: transformar el backend POS de abarrotes (`com.erikjarquin.ventas`) en un
@@ -164,6 +316,8 @@ Capas: `controller/ → service/ (interfaz) → service/impl/ → repository/ �
 
 ## Pendientes / issues conocidos
 
+- 🔜 **SKU/Barcode duplicado devuelve 500 en vez de 409** → plan completo en la sesión **2026-09-28** de arriba. Affected: `ProductRepository` (sin `existsBySku`), `ProductImpl.save/update` (sin chequeo), `GlobalExceptionHandler` (sin handler de `DataIntegrityViolationException`). El frontend ya no muestra nada (solo `console.log`), así que ambos lados hay que tocar juntos.
+- ⚠️ **`/ping` sigue sin existir** — no usarlo como healthcheck de Railway.
 - ⚠️ **Secretos en historial de git**: purgar con `git filter-repo` antes de publicar el repo.
 - **Imágenes**: sin perfil dev/prod separado en el frontend para `environment-prod.ts` (requiere definir la API de Railway al desplegar).
 - **Tests**: **130 en verde** (repos + servicios + file storage + 10 controllers WebMvc + bootstraps). `VentasApplicationTests` (`@SpringBootTest`) solo corre contra una BD real accesible.
