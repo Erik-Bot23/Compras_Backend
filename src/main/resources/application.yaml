@@ -44,7 +44,7 @@ spring:
     #   DB_HOST=<host del Dashboard>  DB_PORT=5432  DB_NAME=postgres
     #   DB_USER=postgres  DB_PASSWORD=<password real>  DB_SSLMODE=require
     # Los defaults de aquí (localhost/compras_db/disable) son SOLO para local.
-    #los prepared statements chocando con el pooler de Supabase
+    # los prepared statements chocando con el pooler de Supabase
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:compras_db}?sslmode=${DB_SSLMODE:disable}&prepareThreshold=0
     username: ${DB_USER}
     password: ${DB_PASSWORD}

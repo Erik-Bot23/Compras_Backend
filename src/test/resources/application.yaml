@@ -45,7 +45,7 @@ spring:
       max-request-size: 20MB
 
   flyway:
-    enabled: false # Los tests no corren migraciones ni las buscan
+    enabled: false # true Los tests no corren migraciones ni las buscan. Usar true cuando se ejecuta por primera vez.
 
   jpa:
     hibernate:
