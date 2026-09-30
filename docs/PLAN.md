@@ -1,7 +1,10 @@
 # Compras-Backend — Plan de Refactorización
 
-> Versión 2026-09-23 — Especificación para transformar el sistema de **ventas de tienda**
+> Versión 2026-09-30 — Especificación para transformar el sistema de **ventas de tienda**
 > a un sistema de **tienda de comida** con venta local (POS) + venta online (storefront).
+>
+> **Progreso: Fase 1 ✅ hecha (2026-09-30). Fases 2-8 ⬜ pendientes.**
+> Las 5 decisiones de §6 quedaron CONFIRMADAS ese día (ver §6).
 
 ---
 
@@ -9,9 +12,9 @@
 
 | Sistema | Ruta | Estado |
 |---|---|---|
-| **Compras-Backend** | `Compras-Backend` | Spring Boot 4 completo, paquete `com.erikjarquin.ventas`, 12 controllers / 57 endpoints / 130 tests. POS-focused (ventas, pagos terminal, caja, reportes). |
-| **Compras-Frontend-Local** | `Compras-Frontend-Local` | Angular 21 standalone + SSR completo. Features en español: `cobro` (POS), `productos`, `categorias`, `compras` (3 tabs), `reportes`, `salehistory`, `usuarios`, `roles`, `deactivated-*`, sidebar data-driven con permisos. Sin módulos clientes/pedidos/caja. |
-| **Compras-Frontend-Cliente** | `Compras-Frontend-Cliente` | Solo `.git` (vacío) → el Next.js nace aquí. |
+| **Compras-Backend** | `Compras-Backend` | Spring Boot 4 completo, paquete `com.erikjarquin.compras`, 12 controllers / 64 endpoints bajo `/api/local/**` / 173 tests / 37 permisos. POS-focused (ventas, pagos terminal, caja, reportes). **Fase 1 + ciclo de vida de la venta (V2) + compras confirmadas, utilidad y cajas numeradas (V3) aplicados.** |
+| **Compras-Frontend-Local** | `Compras-Frontend-Local` | Angular 21 standalone. Features en español: `cobro` (POS), `productos`, `categorias`, `compras` (3 tabs), `reportes`, `salehistory`, `usuarios`, `roles`, `deactivated-*`, sidebar data-driven con permisos. **Migrado a `${environment.apiLocal}`** (= `/api/local`). Sin módulos insumos/pedidos/platillos. |
+| **Compras-Frontend-Cliente** | `Compras-Frontend-Cliente` | Next.js 16 (App Router) + React 19 + Tailwind 4. **Solo scaffold**: 31 archivos stub, 0 bytes. `lib/api.ts`, `lib/types.ts`, contexts y componentes vacíos. `NEXT_PUBLIC_API_URL` sin definir. Fase 6. |
 
 ---
 
@@ -36,11 +39,11 @@ pedidos/pago                    BD compartida                online (tiempo real
 
 ## 2. Backend — qué se refactoriza y qué se agrega
 
-### 2.1 Refactor base (naming ventas → compras)
+### 2.1 Refactor base (naming ventas → compras) ✅ APLICADO el 2026-09-30
 
-- Paquete `com.erikjarquin.ventas` → `com.erikjarquin.compras`; `VentasApplication` → `ComprasApplication`; `pom.xml` artifactId `compras`; `spring.application.name`; DB `compras_db` (BD nueva limpia, recomendado) o migrar la existente.
-- **Separar rutas por prefijo**: lo actual pasa a `/api/local/**` (POS/gestión) y lo nuevo queda en `/api/tienda/**` (cliente). Seguridad: `/api/tienda/productos/**` público de solo lectura; el resto autenticado.
-- Actualizar README, AGENTS.md, Dockerfile y javadocs.
+- ✅ Paquete `com.erikjarquin.ventas` → `com.erikjarquin.compras`; `VentasApplication` → `ComprasApplication`; `pom.xml` artifactId `compras`; `spring.application.name: compras`; DB `compras_db`.
+- ✅ **Separar rutas por prefijo**: lo actual pasó a `/api/local/**` (POS/gestión) y lo nuevo queda en `/api/tienda/**` (cliente, Fase 3). Seguridad: `/api/local/auth/**` público; `/api/uploads/**` público y **fuera** de `/api/local` (el storefront necesita las mismas imágenes).
+- ✅ README, AGENTS.md, Dockerfile y javadocs actualizados.
 
 ### 2.2 Modelo de datos nuevo
 
@@ -118,17 +121,17 @@ RecetaDetalleEntity (id, platillo, insumo, cantidadNecesaria)
 
 ## 5. Hoja de ruta (paso a paso, con verificación en cada fase)
 
-**Fase 1 — Base backend**: renombrar ventas→compras (paquete/clases/artefacto/DB), dividir prefijos `/api/local`, actualizar README/AGENTS. → `mvn test` y Angular volviendo a apuntar a `/api/local` en verde.
+**Fase 1 — Base backend** ✅ **HECHA (2026-09-30)**: renombrar ventas→compras (paquete/clases/artefacto/DB), dividir prefijos `/api/local`, actualizar README/AGENTS. Verificado: `mvn test -Dtest='!ComprasApplicationTests'` → 129/129 verde, y `ng build` del Angular en verde apuntando a `${environment.apiLocal}`. Detalle en `AGENTS.md` (sesión 2026-09-30).
 
-**Fase 2 — Platillos + Insumos + Recetas** (backend y luego UI Angular): modelo de insumos, receta, migración producto→platillo con descripción, endpoints. Verificación: CRUD de insumos en Angular + POS validando disponibilidad.
+**Fase 2 — Platillos + Insumos + Recetas** ← **SIGUIENTE**: modelo de insumos, receta, migración producto→platillo con descripción, endpoints. Verificación: CRUD de insumos en Angular + POS validando disponibilidad.
 
-**Fase 3 — Cliente + rol CLIENTE + auth**: entidad, JWT con `tipo`, endpoints `/api/tienda/auth`, CORS agrega `http://localhost:3000`.
+**Fase 3 — Cliente + rol CLIENTE + auth**: entidad, JWT con `tipo`, endpoints `/api/tienda/auth`, CORS ya incluye `http://localhost:3000` (anticipado en la Fase 1).
 
 **Fase 4 — Pedidos + DetallePedido + estados + WS**: endpoints tienda/local, WebSocket STOMP, número de pedido. Verificación: crear pedido por curl → evento llega al clon Angular.
 
 **Fase 5 — Pago online (Stripe test)**: checkout con tarjeta en modo test; `estadoPago`. Sin datos de tarjeta en el backend (token).
 
-**Fase 6 — Next.js (Compras-Frontend-Cliente)**: scaffold → catálogo SSR → carrito → checkout (sin pago real) → login/registro cliente → mis pedidos. `ng build`/`next build` OK.
+**Fase 6 — Next.js (Compras-Frontend-Cliente)**: scaffold → catálogo SSR → carrito → checkout (sin pago real) → login/registro cliente → mis pedidos. `next build` OK. ⚠️ El scaffold ya existe pero está **vacío**; no requiere backend previo para arrancar.
 
 **Fase 7 — Angular panel pedidos + insumos UI + sidebar**: pedidos en tiempo real (STOMP), botones de estados, alertas de insumos bajos, reetiquetado visual.
 
@@ -136,10 +139,21 @@ RecetaDetalleEntity (id, platillo, insumo, cantidadNecesaria)
 
 ---
 
-## 6. Decisiones a confirmar antes de empezar
+## 6. Decisiones — CONFIRMADAS el 2026-09-30
 
-1. **BD nueva limpia** (`compras_db`, sin datos) o migrar la `ventas_db` existente con datos de prueba.
-2. **Stock de platillo**: (a) derivado de insumos por receta (más "chef", recomendado) o (b) platillo con stock aparte + insumos solo informativos.
-3. **Pasarela**: Stripe (test) vs MercadoPago (más común en LatAm).
-4. **Delivery real** desde el inicio o solo "recoger en tienda" primero.
-5. **Cambiar lector de código de barras**: quitar del todo o dejarlo opcional (existen códigos en bebidas/empaques).
+Estas 5 bloqueaban el modelo de datos (y por tanto la migración Flyway de la
+Fase 2). Ya no son preguntas abiertas:
+
+1. **BD**: `compras_db` (ya es el nombre en `application.yaml`; Flyway la crea con
+   `V1__init.sql`). No se migra `ventas_db`. ✅
+2. **Stock de platillo**: **(a) derivado de insumos por receta**. `Platillo`
+   NO acumula stock; su disponibilidad se calcula con los insumos de su receta.
+   `sku`/`barcode` quedan **opcionales (`null`)** — compatible con el 409 por
+   duplicado ya implementado (ver `AGENTS.md` 2026-09-28). ✅
+3. **Pasarela**: **Stripe en modo test**. El backend nunca ve datos de tarjeta
+   (solo el token). ✅
+4. **Entrega**: **solo "recoger en tienda" al inicio**. `tipoEntrega` queda en el
+   modelo desde el principio (para no romper la BD después) pero el checkout solo
+   ofrece `RECOGER`; `DOMICILIO` se agrega después. ✅
+5. **Lector de código de barras**: **opcional**, no se quita. Hay códigos en
+   bebidas y empaques, así que `barcode` sigue como campo nullable. ✅

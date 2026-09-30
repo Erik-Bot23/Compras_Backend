@@ -5,8 +5,8 @@
 ## Stack
 
 - **Spring Boot 4.0.5** · Java 21 · Maven (`mvnw.cmd`)
-- **PostgreSQL** `compras_db` (localhost:5432, usuario `postgres` / `admin`). `ventas_db` (misma instancia) conserva el esquema ORIGINAL del POS: se usó como fuente para generar `V1__init.sql`
-- **Flyway** (migraciones versionadas en `src/main/resources/db/migration/`, `V1__init.sql` = esquema completo)
+- **PostgreSQL** `compras_db` (localhost:5432, usuario `postgres` / `admin`). La BD original del POS (`ventas_db`, misma instancia) se usó como fuente para generar `V1__init.sql`
+- **Flyway** (migraciones versionadas en `src/main/resources/db/migration/`: `V1__init.sql` = esquema base de las 13 tablas · `V2__venta_confirmada.sql` = ciclo de vida de la venta, 2026-09-30 · `V3__compras_confirmadas_costo_y_cajas.sql` = confirmación de compras + costo congelado + cajas numeradas, 2026-09-30)
 - **Spring Data JPA** (Hibernate 7.2.7), `ddl-auto: update` local / `validate` en producción (ver 2026-09-23)
 - **Spring Security + JWT** (jjwt 0.11.5, HS256, expiración 5h, secret desde `${JWT_SECRET}`)
 - **spring-boot-starter-mail** (Gmail SMTP para recuperar contraseña)
@@ -18,190 +18,361 @@
 
 Capas: `controller/ → service/ (interfaz) → service/impl/ → repository/ → model/entity/`. DTOs en `model/dto/`, Mappers en `mapper/` (algunos estáticos, otros `@Component`), config en `config/`, excepciones en `exceptions/`.
 
-- **12 controllers, 57 endpoints** (`/api/...`)
-- Autorización por permiso vía `@PreAuthorize("hasAuthority('...')")` (**34 permisos** en `PermissionName`; ver borrado lógico de productos 2026-09-17 (3))
+- **12 controllers, 64 endpoints** bajo `/api/local/...` (el prefijo `/api/tienda/**` del storefront **nace en la Fase 3**)
+- **Prefijos de dominio** (ver `docs/PLAN.md` §1-§2): `/api/local/**` = POS/gestión del empleado (Angular) · `/api/tienda/**` = cliente (Next.js) · `/api/uploads/**` = estático, público y compartido por ambos
+- Autorización por permiso vía `@PreAuthorize("hasAuthority('...')")` (**37 permisos** en `PermissionName`: los 34 de siempre + `CONFIRMAR_VENTAS`/`CANCELAR_VENTAS` (V2) + `CONFIRMAR_COMPRAS` (V3), los tres el 2026-09-30)
 - 4 `CommandLineRunner` de bootstrap (orden): `RoleBootstrap` → `AdminBootstrap` → `PermissionBootstrap` → `RolePermissionBootstrap`. Todos respetan el flag `app.seed-bootstraps` (`APP_SEED_BOOTSTRAPS`, default `true`) y siembran **solo si está vacío** (NO self-healing; ver 2026-09-17 (2)).
 - Admin inicial: `18jarquinsanchezerik1a@gmail.com` / `1234`
+- **Paquete raíz**: `com.erikjarquin.compras` (era `...ventas` hasta el 2026-09-30)
 
 ## Endpoints principales
 
+Base de los 12 módulos = `/api/local`:
+
 | Módulo | Base | Notas |
 |---|---|---|
-| Auth | `/api/auth` | login, forgot/reset/change-password, me/authorities — público |
-| Users | `/api/users` | CRUD + `PATCH /{id}/active` |
-| Roles | `/api/roles` | CRUD |
-| Permissions | `/api/permissions` | GET all |
-| Products | `/api/products` | CRUD multipart, `/barcode/{bc}`, `/search?q=`, `?category=`, `/inactive`, `PATCH /{id}/deactivate`, `PATCH /{id}/active` |
-| Categories | `/api/categories` | CRUD |
-| Sales | `/api/sales` | POST (efectivo/transit/tarjeta), GET |
-| Payments | `/api/payments` | card, status/{tx}, retry/{id}, reverse/{id} |
-| Purchases | `/api/purchases` | GET (todos, por proveedor, detalle), POST, DELETE (cancelar) |
-| Providers | `/api/providers` | CRUD |
-| Cash | `/api/cash` | open, close, summary, active |
-| Reports | `/api/reports` | trend, top-products, payment-methods, categories, low-stock, **margins**, summary (todas con `VER_REPORTES`) |
-| Uploads | `/api/uploads/**` | **Público** — sirve imágenes de productos |
+| Auth | `/api/local/auth` | login, forgot/reset/change-password, me/authorities — público |
+| Users | `/api/local/users` | CRUD + `PATCH /{id}/active` |
+| Roles | `/api/local/roles` | CRUD |
+| Permissions | `/api/local/permissions` | GET all |
+| Products | `/api/local/products` | CRUD multipart, `/barcode/{bc}`, `/search?q=`, `?category=`, `/inactive`, `PATCH /{id}/deactivate`, `PATCH /{id}/active` |
+| Categories | `/api/local/categories` | CRUD |
+| Sales | `/api/local/sales` | POST (efectivo/transit/tarjeta), GET, PATCH `/{id}/confirm`, PATCH `/{id}/cancel` |
+| Payments | `/api/local/payments` | card, status/{tx}, retry/{id}, reverse/{id} |
+| Purchases | `/api/local/purchases` | GET (todos, por proveedor, detalle), POST, DELETE (cancelar) |
+| Providers | `/api/local/providers` | CRUD |
+| Cash | `/api/local/cash` | open, close, summary, active |
+| Reports | `/api/local/reports` | trend, top-products, payment-methods, categories, low-stock, **margins**, summary (todas con `VER_REPORTES`) |
+| Uploads | `/api/uploads/**` | **Público** — imágenes de platillos/productos. **FUERA** de `/api/local` a propósito: el storefront las necesita públicas |
 
 ## Estado de módulos
 
 - **Terminal pagos**: abstracción `TerminalService` con `TerminalSimulatedImpl` (tarjetas de prueba DETERMINISTIC) y `TerminalPhysicalImpl` (Socket TCP, protocolo `PAY|`/`REV|`/`STS|`).
 - **Pagos**: estados PENDING/PROCESSING/APPROVED/REJECTED/REVERSED, reintentos (máx 3), idempotencia, reversas. `PaymentMonitorJob` (`@Scheduled`, cada 5 min) revisa pagos PENDING > 5 min.
-- **Frontend conectado**: Angular 21 standalone + SSR en `Ventas-Frontend` (ruta hermana), consume `http://localhost:8081/api`. Espera que `img` de productos sea **URL completa**.
+- **Dos frontends** (ruta hermana): `Compras-Frontend-Local` (Angular 21, POS, `:4200`) y `Compras-Frontend-Cliente` (Next.js 16, storefront, `:3000`). Ambos consumen este único backend. El Angular usa `${environment.apiLocal}`; el Next.js usará `${api}/tienda` (aún no existe). Ambos esperan que `img` de productos sea **URL completa**.
 - **Reportes**: dashboard hecho (ver sesión 2026-09-12 (3)). Las consultas agregan EN SQL y devuelven DTO; el frontend solo grafica con Chart.js (SSR-safe) y exporta PDF/Excel en cliente.
 - **Compras**: módulo completo (ver sesión 2026-09-13 (2)). Proveedores (CRUD, RFC único) + compras con renglones que al registrarse SUMAN stock y guardan el costo real del producto; cancelación revierte stock. `margins` (costo real vs precio) en reportes.
+- **Tienda de comida (Fases 2-8, PENDIENTES)**: siguen sin existir `Insumo`, `Platillo`, `RecetaDetalle`, `Cliente`, `Pedido`, `DetallePedido`, el rol CLIENTE ni WebSocket. Ver `docs/PLAN.md`.
 
 ## Registro de cambios / decisiones
 
-### 2026-09-28 — 📋 PLAN (NO IMPLEMENTADO): SKU / Barcode duplicado → 409 con mensaje
+### 2026-09-30 (3) — V3: confirmar compras, costo congelado, cajas numeradas y utilidad
 
-> **Estado: solo es un plan.** No se escribió código. Se documenta aquí para poder
-> retomarlo en otra máquina. Contraparte en el frontend: `Compras-Frontend-Local/AGENTS.md`
-> (misma fecha, misma sección).
+> Tres cosas que el dueño pidió y que son **la misma idea**: nada se contabiliza hasta que
+> pasa por un acto explícito. Comprar no suma stock hasta **confirmar**; la utilidad usa el
+> costo **congelado al vender**; una caja se identifica por el **número** que escribe el
+> vendedor. Las 3 decisiones del usuario: una sola caja activa (con número), utilidad por
+> **costo real de lo vendido** (no compras del periodo), y cancelar una compra pendiente la
+> **elimina**.
 
-**Problema confirmado por auditoría del código (no era suposición):** hoy un SKU o
-barcode duplicado produce **HTTP 500 "Ocurrió un error interno en el servidor"** y
-el usuario no ve nada. La cadena:
+**1. El efecto en el inventario se mudó de `create()` a `confirm()`**
 
-1. `ProductEntity.java:53-57` → `@Column(unique = true)` en `barcode` y `sku`.
-2. `V1__init.sql:568` (`UNIQUE (sku)`) y `:613` (`UNIQUE (barcode)`) → los
-   constraints existen en PostgreSQL.
-3. `ProductRepository` **NO tiene** `existsBySku` / `existsByBarcode`.
-4. `ProductImpl.java:95-96` (save) y `:124-125` (update) hacen
-   `entity.setSku(sku)` a ciegas, sin verificar.
-5. El `UNIQUE` revienta en `repository.save()` → Hibernate →
-   `DataIntegrityViolationException`.
-6. `GlobalExceptionHandler` **NO tiene handler** para `DataIntegrityViolationException`
-   → cae en el catch-all (`:226-231`) → 500 genérico.
+`PurchaseImpl.create()` ya **no toca el inventario**: arma cabecera + renglones + total y
+nace **PENDIENTE**. El stock y el `product.cost` se escriben en
+`PurchaseImpl.confirm()` (V3), que es el acto que declara que la mercancía **llegó**.
 
-`ProductEntity` es la **única** entidad con columna `unique = true` que no tiene
-chequeo de duplicados en el service. Todos los demás módulos sí lo tienen
-(`ProviderImpl`, `CategoryImpl`, `UserImpl`, `RoleImpl`).
+| Estado | Significado | ¿Se cancela? |
+|---|---|---|
+| **PENDIENTE** | registrada, el inventario intacto | **sí**, se borra (nada que revertir) |
+| **CONFIRMADA** | la mercancía entró: stock + y costo vigente | **no (409)** |
 
-**Solución-planeada: 4 archivos.**
+- **Confirmar es idempotente**: 200 aunque ya estuviera confirmada, y **no vuelve a sumar el
+  stock** (doble clic / reintento tras corte de red). Un 409 ahí sería confuso.
+- **Cancelar se simplificó de golpe**: el `Math.max(stock - qty, 0)` y la validación de stock
+  en dos fases **desaparecieron**, porque una compra pendiente nunca tocó el inventario. El
+  bug de 2026-09-30 (comprar 10 → vender 5 → cancelar escribía stock=0 con 5 unidades ya
+  vendidas) **ya no es representable**: no está escondido detrás de una validación, está
+  estructuralmente eliminado. Confirmar devuelve 409 si ya está confirmada.
+- El `cost` lo escribe confirmar y **no se revierte nunca** (mismo criterio de V2).
+- `PurchaseImplTest` se **reescribió** (11 tests): el que blinda el bug ahora es
+  `cancelarCompra_confirmada_Lanza409YNoEscribe` + `cancelarCompra_pendiente_laBorraYNoEscribe`
+  (que además exige que cancelar **ni consulte** los productos, con
+  `verify(productRepository, never()).findById(any())`).
 
-1. **`repository/ProductRepository.java`** — 4 métodos nuevos (el repo solo tiene `findByBarcode`):
+**2. `sale_details.unit_cost`: el costo congelado (base de la utilidad)**
 
-```java
-    //=== CONTROL DE DUPLICADOS ==========================================
-    //sku y barcode son UNIQUE en BD (V1__init.sql). Permiten detectar el
-    //duplico ANTES de que reviente el constraint → 409 en vez de 500.
-    boolean existsBySku(String sku);
-    //Variante para update: ignora al propio producto (si no, editar sin
-    //cambiar el SKU se detectaría a sí mismo → falso positivo).
-    boolean existsBySkuAndIdNot(String sku, Long id);
-    boolean existsByBarcode(String barcode);
-    boolean existsByBarcodeAndIdNot(String barcode, Long id);
-```
+`SaleImpl.createDetail()` copia `product.getCost()` al renglón, igual que ya hacía con
+`unitPrice`. Sin esto, la utilidad de una venta pasada habría que calcularla con
+`product.cost`, que es el del **último purchase de hoy**: comprar algo más barato mañana
+reescribiría la ganancia de ayer. Nullable a propósito (NULL = "costo desconocido" ≠ 0, que
+inflaría la utilidad).
 
+**3. Utilidad real: `GET /api/local/reports/profit` (con `ProfitDTO`)**
+
+`revenue` − `costOfGoodsSold` = `grossProfit`, y `marginPercent` sobre venta. **No** es
+"ventas − compras del periodo": ese dinero no se perdió, quedó en el almacén, y restarlo
+subestimaría la utilidad. `itemsWithoutCost` cuenta los renglones sin costo para que la
+pantalla **avise** en vez de mostrar una utilidad inflada. Nueva `ReportException` (404 para
+una caja inexistente) + handler `REPORT_ERROR`.
+
+**4. 🐛 Bug encontrado de paso: las ventas ANULADAS se contabilizaban como ingresos**
+
+V2 dejó de **borrar** la venta al anularla (es evidencia contable) pero **no cambió su
+`paymentStatus`**, que sigue en `APPROVED`. Los agregados filtraban solo por `APPROVED`, así
+que **una venta anulada seguía sumando ingresos** — y con V3 también habría sumando costo.
+Se agregó `AND s.cancelled = false` a las **6** consultas de `SaleRepository` y un `continue`
+en `CashRegisterImpl.calculateSummary` (si no, anular una venta en efectivo dejaba su dinero
+dentro del "esperado" del corte y el cajero sacaba una diferencia fantasma).
+⚠️ Son **2 ejes ortogonales** (`PaymentStatus` × `cancelled`), por eso hacen falta las dos
+condiciones. Regresión fijada en `ReportQueryTest` con una venta anulada en el seed.
+
+**5. Cajas numeradas + filtro por caja (V3)**
+
+- `cash_registers.number` `varchar(50) NOT NULL UNIQUE` (backfill `'CAJA-' || id`). Se agrega
+  NULL → rellena → `SET NOT NULL` porque el default de una columna nueva **no** aplica a
+  filas existentes en PostgreSQL. Sin `UNIQUE` dos cortes distintos se mezclarían al filtrar.
+- **Una sola caja activa** (se mantiene el 409) y **NO** se agregó `user_id`: se decidió que
+  la caja se identifica por número, no por vendedor.
+- `OpenCashRequest.number` **obligatorio**; `CashRegisterImpl.normalizeNumber()` recorta y
+  **capitaliza** a propósito: `"caja 1"` y `"CAJA 1"` son la misma caja y el UNIQUE de
+  PostgreSQL las dejaría pasar como dos.
+- Endpoints nuevos: `GET /api/local/cash/history`, `GET /api/local/cash/number/{number}`
+  (`VER_CAJA`, no `CORTE_CAJA`: ver una lista es consultar) y
+  `GET /api/local/reports/cash/{cashId}` (`CashReportDTO`: ventas + utilidad de esa caja).
+- `PATCH /api/local/purchases/{id}/confirm` con permiso **`CONFIRMAR_COMPRAS`** (37º
+  permiso), asignado a **ADMIN y ALMACENISTA** en la **migración** y no en el bootstrap
+  (mismo criterio que V2: en una BD ya sembrada un permiso nuevo nunca llegaría solo).
+
+**6. Tests (20 nuevos → suite en 173)** · `PurchaseImplTest` reescrito (11),
+`PurchaseControllerTest` +4 (confirm 200/409/404/403), `CashRegisterControllerTest` +5
+(número obligatorio/409/historial/por número), `ReportControllerTest` +5 (profit, rango,
+caja, 404, 403), `ReportQueryTest` +4. `mvn test -Dtest='!ComprasApplicationTests'` →
+**173/173**.
+
+**7. Frontend (Angular)** · botón **Confirmar** + badge Pendiente/Confirmada + fila atenuada
++ `Cancelar` deshabilitado si está confirmada, todo por permiso; `confirmPurchase()` con
+`PATCH`; el input de número en el modal de abrir caja; selector "filtrar por caja" y 3
+tarjetas de utilidad (Ingresos / Costo de lo vendido / Utilidad) con `accent-red` si es
+negativa, aviso de renglones sin costo y detalle de caja con sus ventas.
+
+**Pendientes / debilidades conocidas**
+
+1. ⚠️ **Falta `purchases.confirmed` en el CHECK** — no hay `CHECK NOT (confirmed AND
+   cancelled)` para ventas (ver más arriba) ni para compras. Ambas irían en una **V4**.
+2. ⚠️ `PurchaseImpl.confirm()` **tampoco** usa bloqueo pesimista: dos peticiones
+   simultáneas podrían pasar el `if(!isConfirmed())` y **sumar el stock dos veces**. Es el
+   mismo hueco que en `SaleImpl.confirm()`. Arreglo: `@Lock(PESSIMISTIC_WRITE)` o
+   `UPDATE ... WHERE confirmed = false` devolviendo las filas afectadas.
+3. El backfill de `unit_cost` usa el **costo actual** del producto (mejor aproximación, no
+   el costo histórico exacto). Las ventas **anteriores a V3** pueden tener utilidad
+   levemente incorrecta; las nuevas son exactas.
+4. El **CHECK `permissions_name_check` de `V1` (34) quedó desactualizado**: ahora hay 3
+   migraciones que lo reescriben (V2 → 36, V3 → 37). En una BD **nueva** Flyway las
+   aplica en orden y el resultado es correcto; en una **existente** hay que aplicar V2 y V3
+   (lo hacen solas). El enum de Java y las 3 migraciones deben seguir sincronizados.
+
+### 2026-09-30 (2) — Ciclo de vida de la venta + integridad del inventario (V2)
+
+> Corrige un bug **de datos**: cancelar una compra cuyo stock ya se había vendido escribía
+> inventario FALSO con un 200 OK. Y cierra la puerta por la que se llegaba a ese estado.
+
+**1. El bug (Punto 1 del encargo)**
+
+`PurchaseImpl.cancel()` hacía `product.setStock(Math.max(stock - qty, 0))`. El `max` no impedía
+la operación imposible: la obligaba a **escribir un número falso**. Escenario: comprar 10 →
+vender 5 → cancelar la compra → `5-10 = -5` → `max` → **stock = 0**, con 5 unidades ya
+vendidas. El usuario recibía 200 OK y nadie se enteraba.
+
+**Regla implementada**: si `product.stock < detail.quantity` para algún renglón, la compra
+**NO se cancela** → 409 con la **lista de todos** los productos en conflicto, y **no se
+escribe absolutamente nada**. Por eso `cancel()` está en **dos fases**: (1) validar todos los
+renglones acumulando conflictos, (2) escribir solo si la fase 1 terminó limpia. El `Math.max`
+se eliminó. Las 3 razones están en el Javadoc de `PurchaseImpl.cancel()` (mensaje útil, no
+depender del rollback de `@Transactional`, legibilidad).
+
+**2. `cost` y `price` NO se revierten en la cancelación**
+
+`product.cost` es el **último costo de compra vigente**, no un promedio ni un saldo: el
+inventario que sobrevive a la cancelación sí costó eso. `price` es decisión comercial y el
+módulo de compras **jamás** lo escribe. Solo se revierte la cantidad. (Cerrado el pendiente que
+"faltaba decidir" sobre precio.)
+
+**3. La venta recibió estados (el diseño que faltaba)**
+
+Para que el inventario no sea manipulable después de que el cliente se llevó la comida:
+
+| Estado | Significado | ¿Se anula? |
+|---|---|---|
+| abierta | registrada, stock descontado, pedido en proceso | **sí**, si es efectivo |
+| **CONFIRMADA** | el pedido salió: dinero y stock son hechos reales → **congelada** | **no (409)** |
+| **ANULADA** | error de caja / mal cobro; el stock volvió | **no (409)** |
+
+- **Confirmar es idempotente**: 200 aunque ya estuviera confirmada (doble clic, reintento). Un
+  409 ahí sería confuso.
+- **Anular NO borra la fila**: la deja con `cancelled=true`. El historial de un POS es
+  evidencia contable; un contador que baja solo es un agujero de fraude.
+- **Anular solo accepts `CASH`**: con tarjeta el dinero ya entró y la reversa real es
+  `POST /api/local/payments/reverse/{id}` (que además pide su propio permiso).
+- **La anulación recorre `sale.getDetails()`, no un request**: se deshace exactamente lo que se
+  hizo. No acepta cantidades del cliente.
+- Efecto dominó: venta confirmada ⇒ el stock es real ⇒ esa compra ya no se puede cancelar.
+- `PaymentStatus` y el estado de la venta son **ejes ortogonales**: una venta con pago
+  APPROVED puede estar ANULADA. Por eso son 2 booleanos y **no** un enum de estado (un enum
+  metería "ANULADA" dentro del eje del pago y rompería los reportes).
+
+**4. `V2__venta_confirmada.sql` (198 líneas, la 2ª migración del proyecto)**
+
+- `sales`: `confirmed` / `cancelled` `boolean NOT NULL DEFAULT false` + `confirmed_at` /
+  `cancelled_at` `timestamp(6)` NULL, con `IF NOT EXISTS` y `COMMENT ON COLUMN`. Las ventas
+  existentes nacen **no confirmadas** (estado correcto: una venta vieja se confirma hoy y
+  recién ahí queda congelada).
+- `permissions`: `DROP` + `ADD` de `permissions_name_check` con los **36** nombres
+  (`IN (...)`, legible) y seed idempotente (`INSERT ... SELECT ... WHERE NOT EXISTS`) de
+  `CONFIRMAR_VENTAS` / `CANCELAR_VENTAS`.
+- Asignados a `ADMIN` y `CAJERO` con `INSERT ... SELECT ... CROSS JOIN ... NOT EXISTS` sobre
+  la tabla puente `role_permissions`. **En la migración y no en `RolePermissionBootstrap`** a
+  propósito: ese bootstrap es seed-inicial (no self-healing, ver 2026-09-17 (2)), así que en
+  una BD ya sembrada un permiso nuevo nunca llegaría solo a los roles.
+- Verificado: los 36 nombres de V2 = los 34 de V1 + los 2 nuevos, sin perder ninguno.
+
+**5. Endpoints, permisos, excepciones, frontend**
+
+- `PATCH /api/local/sales/{id}/confirm` (`CONFIRMAR_VENTAS`) y
+  `PATCH /api/local/sales/{id}/cancel` (`CANCELAR_VENTAS`) — PATCH y no PUT porque es un
+  cambio **parcial** de estado: un PUT reenviaría la venta entera y podría pisar stock/total.
+- `SaleException` ahora transporta su propio `HttpStatus` (404 / 409 / 400) en vez de ser
+  siempre 400; `GlobalExceptionHandler` lo traduce. `getSaleById` inexistente: 400 → **404**.
+- Angular (`Compras-Frontend-Local`): `SaleHistory` con los campos nuevos,
+  `confirmSale()`/`cancelSale()` con PATCH, badges Pendiente/Confirmada/Anulada, fila anulada
+  tachada, diálogos de confirmación, botones por permiso, y **409 mostrado al usuario** con
+  `alert(err.error?.message)`. El `Anular` solo aparece con `CANCELAR_VENTAS` **y** efectivo
+  **y** venta abierta. La fila se reemplaza por la respuesta del servidor (no estado local
+  optimista).
+
+**6. Tests (24 nuevos → suite en 153)**
+
+`PurchaseImplTest` (+4), `SaleControllerTest` (+8), `SaleImplLifecycleTest` (nuevo, 11).
+El assert que blinda el bug original es
+`verify(productRepository, never()).save(any())`: no basta que se lance la excepción, hay que
+verificar que **nada se escribió**. `mvn test -Dtest='!ComprasApplicationTests'` → **153/153**.
+
+**7. PDFs en `docs/`** (generados con `reportlab`, leyendo el código real de los archivos)
+
+- `01-Fase1-Paquete-Compras-y-Prefijo-Api-Local.pdf` (12 pág.) — este punto 1.
+- `02-Ciclo-Ventas-Integridad-Stock-Compras.pdf` (18 pág.) — este punto 2.
+
+⚠️ Generador **fuera** del repo (en `%TEMP%\opencode\`: `generar_pdfs.py` + `pdf1.py` +
+`pdf2.py` + `generar_docs.py`). Se lee el código de los archivos, así que si el código cambia
+hay que regenerar. Lecciones del generador: dividir el contenido en módulos (un solo archivo
+excede el límite de longitud del shell → `spawn ENAMETOOLONG`), `st.extend(bullets([...]))` y
+no `st.append` (los bullets devuelven una **lista**, no un Flowable), y los bloques de código
+largos se recortan por rango de líneas (`bloque(ruta, inicio=, fin=)`) porque ReportLab no
+puede partir un bloque de más de 654 pt.
+
+**Pendiente / debilidades conocidas de este diseño** (documentadas en §19 del PDF 2):
+
+1. La exclusión mutua `confirmed`/`cancelled` vive en el **código**, no en la BD (no hay
+   `CHECK NOT (confirmed AND cancelled)`). Se puede agregar en una V3. ⚠️ **OJO: la V3 ya
+   existe y se usó para otro cosa** (compras/costo/cajas) → si se agrega el CHECK va en una V4.
+2. `confirm()`/`cancel()` no usan bloqueo pesimista: dos peticiones simultáneas podrían pasar
+   el mismo `if` y devolver el stock dos veces. Arreglo futuro: `@Lock(PESSIMISTIC_WRITE)` o
+   `UPDATE ... WHERE cancelled = false`. **Aplica igual a `PurchaseImpl.confirm()` de V3.**
+3. La regla de la compra es una **heurística de stock**, no un histórico: si otra compra repuso
+   el mismo producto en medio, la cancelación podría pasar. Resolverlo requiere una tabla de
+   movimientos.
+
+### 2026-09-30 — FASE 1 del PLAN: paquete `compras` + prefijo `/api/local`
+
+> Inicio de la transformación a "tienda de comida" (ver `docs/PLAN.md`).
+> Esta sesión cubre SOLO la Fase 1 (base). Las Fases 2-8 siguen pendientes.
+> Decisiones de `PLAN.md` §6 confirmadas el 2026-09-30: **(a) stock de platillo
+> derivado de insumos por receta**, **(b) pasarela Stripe (modo test)**,
+> **(c) solo "recoger en tienda" al inicio** (sin domicilio).
+
+**Qué cambió**
+
+1. **Paquete `com.erikjarquin.ventas` → `com.erikjarquin.compras`** (164 archivos
+   .java, main + test, con `git mv` para que git registre el rename).
+   `VentasApplication` → `ComprasApplication`, `VentasApplicationTests` →
+   `ComprasApplicationTests`. `pom.xml`: `artifactId` `ventas` → `compras`
+   (+ `name`/`description`, antes vacíos). `spring.application.name` ya era
+   `compras`. El `Dockerfile` usa `target/*.jar` (glob), así que no hubo que
+   tocarlo; solo su comentario de cabecera pasó a "Compras-Backend".
+   ⚠️ **NO** se renombró la palabra "venta"/"ventas" en el dominio: `Venta`/`Sale`
+   sigue siendo un concepto válido y distinto de `Pedido` (el online). Solo se
+   renombró lo que es *identidad del proyecto*.
+2. **Prefijo de rutas: los 12 controllers pasaron a `/api/local/...`** (p. ej.
+   `ProductController` `@RequestMapping("/api/products")` →
+   `"/api/local/products"`). También se actualizaron las ~19 referencias en
+   javadoc `{@code ...}`.
+3. **`SecurityConfig`**: la ruta pública es ahora `/api/local/auth/**` (antes
+   `/api/auth/**`). Se mantiene `/api/uploads/**` como pública y **fuera** de
+   `/api/local` a propósito: en la Fase 3 el catálogo público del storefront
+   tendrá que servir las mismas imágenes de platillos.
+4. **CORS**: el default de desarrollo ahora incluye los dos frontends →
+   `${CORS_ALLOWED_ORIGINS:http://localhost:4200,http://localhost:3000}`. Se
+   agregó `localhost:3000` (Next.js) ya para no olvidarlo en la Fase 3.
+5. **Tests**: 85 URLs de MockMvc actualizadas al nuevo prefijo (13 clases).
+   `javadoc` de `SecurityConfig` documenta la arquitectura de dos prefijos.
+
+**Verificación**: `mvn test -Dtest='!ComprasApplicationTests'` → **129/129 en
+verde, BUILD SUCCESS**. `ComprasApplicationTests` es el único que no corre: es
+`@SpringBootTest` y exige BD real (hoy `application-local.yaml` apunta al
+pooler de Supabase, que rechaza la conexión — pre-existente, no es defecto).
+
+**Lo que NO se tocó (a propósito)**: no se creó ninguna entidad nueva. Siguen sin
+existir `Insumo`, `Platillo`, `RecetaDetalle`, `Cliente`, `Pedido` ni
+`DetallePedido`; el enum `PermissionName` sigue en **34** y los roles en 3
+(ADMIN/CAJERO/ALMACENISTA). No hubo migración Flyway nueva: renombrar paquetes no
+cambia el esquema, así que **`V1__init.sql` seguía siendo la única migración al cerrar esta
+fase** (la 2ª, `V2__venta_confirmada.sql`, llegó ese mismo día: ver la entrada de arriba).
+
+**Contraparte en el frontend** (commit en `Compras-Frontend-Local`):
+`environment.api` pasó a derivar `apiLocal` (`${api}/local`) y los 12 servicios
+HTTP usan `${environment.apiLocal}/...`. El `api` base sigue exportado porque es
+la raíz de la que saldrán `${api}/tienda/...` (Fase 3) y `${api}/uploads`.
+
+**⚠️ Trampa para el Angular**: si agregas un servicio nuevo, usa
+`${environment.apiLocal}` (con `Local`), **nunca** `${environment.api}` directo.
+
+### 2026-09-28 — SKU / Barcode duplicado → 409 con mensaje (YA IMPLEMENTADO)
+
+> **Estado: IMPLEMENTADO** en el commit `1444d87` ("Sku y barcode duplicados").
+> La versión anterior de este archivo lo dejaba como plan; ya no aplica.
+> La contraparte en el frontend (`Compras-Frontend-Local/AGENTS.md`, commits
+> `bfcdb43` y `1aa72b3`) también está implementada.
+
+**Problema que había:** un SKU o barcode duplicado producía **HTTP 500** y el
+usuario no veía nada. La cadena: `@Column(unique = true)` en `ProductEntity` +
+`UNIQUE` en `V1__init.sql` → `repository.save()` reventaba el constraint →
+`DataIntegrityViolationException` sin handler → 500 genérico.
+
+**Lo que se implementó (5 archivos):**
+
+1. **`repository/ProductRepository.java:74-82`** — 4 métodos:
+   `existsBySku`, `existsBySkuAndIdNot`, `existsByBarcode`,
+   `existsByBarcodeAndIdNot`. Los `...AndIdNot` son para el update (si no, editar
+   sin cambiar el SKU se detectaría a sí mismo → falso positivo).
 2. **`service/impl/ProductImpl.java`** — 2 helpers privados:
+   `normalizeCode(String)` (vacío/blank → `null`, porque `""` también es un
+   valor UNIQUE y haría chocar al segundo producto sin SKU) y
+   `validateDuplicates(id, sku, barcode)` (lanza `ProductException` con
+   `HttpStatus.CONFLICT`). Se llaman **antes** de `repository.save()` en `save()`
+   (con `id == null`) y en `update()` (con el `id` real).
+3. **`exceptions/GlobalExceptionHandler.java:227`** — handler de
+   `DataIntegrityViolationException` como **red de seguridad** para la ventana de
+   carrera (dos requests simultáneos con el mismo SKU). Inspecciona
+   `ex.getMostSpecificCause().getMessage()` buscando `"sku"` / `"barcode"` y
+   devuelve **409** con `code: "PRODUCT_ERROR"`. (El mensaje de PostgreSQL trae
+   `key (sku)=(...) already exists`, por eso el `contains` funciona.)
 
-```java
-    //Si el usuario no escribió nada se guarda como null. IMPORTANTE: "" también
-    //es un valor UNIQUE, así que dejarlo como cadena vacía haría que el SEGUNDO
-    //producto sin SKU chocara con el primero (y PostgreSQL sí permite varios NULL).
-    private String normalizeCode(String value){
-        return (value == null || value.isBlank()) ? null : value.trim();
-    }
+**No hizo falta crear la excepción**: `ProductException(String, HttpStatus)` ya
+existía y `GlobalExceptionHandler` ya la traducía a 409 con `code:
+"PRODUCT_ERROR"`. Mismo patrón que `ProviderImpl` (RFC duplicado).
 
-    //409 si el sku o barcode ya pertenecen a OTRO producto. id == null → creando.
-    private void validateDuplicates(Long id, String sku, String barcode){
-        String s = normalizeCode(sku);
-        String b = normalizeCode(barcode);
+**Nada de esto cambió endpoints ni permisos**: `POST /api/local/products` sigue
+devolviendo 200 en éxito y ahora 409 en duplicado. Total sigue en **57
+endpoints / 34 permisos**.
 
-        if(s != null && (id == null
-                ? repository.existsBySku(s)
-                : repository.existsBySkuAndIdNot(s, id))){
-            throw new ProductException(
-                    "Ya existe un producto con el SKU '" + s + "'", HttpStatus.CONFLICT);
-        }
+**Test**: `ProductControllerTest.crearProducto_skuDuplicado_devuelve409`.
 
-        if(b != null && (id == null
-                ? repository.existsByBarcode(b)
-                : repository.existsByBarcodeAndIdNot(b, id))){
-            throw new ProductException(
-                    "Ya existe un producto con el código de barras '" + b + "'", HttpStatus.CONFLICT);
-        }
-    }
-```
+**⚠️ Conflicto con el roadmap (SIGUE VIGENTE)**: `docs/PLAN.md` §2.2 dice
+*"Producto → Platillo: se quita `barcode`/`sku` (o quedan opcionales, `null`)"*.
+Si ese refactor se hace en la Fase 2, **este trabajo queda obsoleto**. Decisión
+tomada: como `normalizeCode` ya devuelve `null` para vacíos y `validateDuplicates`
+salta los `null`, `sku`/`barcode` **pueden quedar como opcionales (`null`)** sin
+tocar nada. Si se confirman como opcionales, no hay que rehacer este código.
 
-3. **`ProductImpl.save()`** (reemplazar las líneas 95-100) — la validación va
-   **ANTES** de `repository.save()`:
-
-```java
-        validateDuplicates(null, sku, barcode);
-        entity.setSku(normalizeCode(sku));
-        entity.setBarcode(normalizeCode(barcode));
-        entity.setImg(fileStorageService.store(image));
-        ProductEntity saved = repository.save(entity);
-```
-
-4. **`ProductImpl.update()`** (reemplazar las líneas 124-125) — se pasa el `id`
-   para auto-excluirse:
-
-```java
-        validateDuplicates(id, sku, barcode);
-        entity.setSku(normalizeCode(sku));
-        entity.setBarcode(normalizeCode(barcode));
-```
-
-5. **Red de seguridad — `exceptions/GlobalExceptionHandler.java`**: el chequeo del
-   service tiene una ventana de carrera (dos requests simultáneos con el mismo SKU
-   pueden pasar los dos checks y luego el constraint revienta igual). Agregar
-   handler **antes** del `@ExceptionHandler(Exception.class)` de la línea 226:
-
-```java
-    @ExceptionHandler(DataIntegrityViolationException.class)
-    public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
-        String raw = String.valueOf(ex.getMostSpecificCause().getMessage()).toLowerCase();
-        log.warn("Dato duplicado en BD: {}", raw);
-
-        String message;
-        if (raw.contains("sku")) {
-            message = "Ya existe un producto con ese SKU";
-        } else if (raw.contains("barcode")) {
-            message = "Ya existe un producto con ese código de barras";
-        } else {
-            message = "No se pudo guardar: el dato ya existe";
-        }
-
-        return buildErrorResponse(HttpStatus.CONFLICT, "PRODUCT_ERROR", message);
-    }
-```
-
-   (El mensaje de PostgreSQL trae `key (sku)=(...) already exists`, por eso el
-   `contains` funciona. Importar `org.springframework.dao.DataIntegrityViolationException`.)
-
-**No hace falta crear la excepción**: `ProductException(String, HttpStatus)` ya
-existe (`ProductException.java:20-23`, default 404) y `GlobalExceptionHandler.java:81-85`
-ya la traduce a 409 con `code: "PRODUCT_ERROR"`. Es el mismo patrón que
-`ProviderImpl.java:50-72` (RFC duplicado).
-
-**Test sugerido** (productos es el ÚNICO módulo sin test de duplicado; comparar con
-`ProviderControllerTest.java:103`, `CategoryControllerTest.java:153`,
-`UserControllerTest.java:97`):
-
-```java
-    @Test
-    void crearProducto_skuDuplicado_devuelve409() throws Exception {
-        when(categoryRepository.findById(1L)).thenReturn(Optional.of(categoria()));
-        when(productRepository.existsBySku("CAF-001")).thenReturn(true);
-
-        mockMvc.perform(multipart("/api/products")
-                        .param("name", "Café 1kg").param("price", "150.00")
-                        .param("stock", "5").param("categoryId", "1")
-                        .param("sku", "CAF-001").param("barcode", "7501234567890"))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("PRODUCT_ERROR"));
-    }
-```
-
-**⚠️ Conflicto con el roadmap**: `docs/PLAN.md:60` dice *"Producto → Platillo: se
-quita `barcode`/`sku` (o quedan opcionales, `null`)"*. Si ese refactor se hace,
-**todo este trabajo queda obsoleto**. Decidir antes de invertir. Si aun así se
-quiere dejar `sku`/`barcode` como opcionales (`null`), los `existsBy*` DEBEN
-saltarse los `null` (por eso `validateDuplicates` normaliza antes).
-
-**Nada de esto cambia endpoints ni permisos**: sigue siendo `POST /api/products`
-(200 en éxito) y ahora 409 en duplicado. Total sigue en **57 endpoints / 34 permisos**.
 
 ### 2026-09-23 — Migraciones Flyway + puntería a Supabase + "compras" como identidad
 
@@ -316,11 +487,12 @@ saltarse los `null` (por eso `validateDuplicates` normaliza antes).
 
 ## Pendientes / issues conocidos
 
-- 🔜 **SKU/Barcode duplicado devuelve 500 en vez de 409** → plan completo en la sesión **2026-09-28** de arriba. Affected: `ProductRepository` (sin `existsBySku`), `ProductImpl.save/update` (sin chequeo), `GlobalExceptionHandler` (sin handler de `DataIntegrityViolationException`). El frontend ya no muestra nada (solo `console.log`), así que ambos lados hay que tocar juntos.
+- 🔜 **Fases 2-8 de `docs/PLAN.md`** (lo siguiente: Fase 2 = Platillos + Insumos + Recetas). Antes de escribir código nuevo, leer la entrada del 2026-09-30 de arriba.
+- ✅ ~~SKU/Barcode duplicado devuelve 500~~ → **resuelto** (409). Ver sesión 2026-09-28.
 - ⚠️ **`/ping` sigue sin existir** — no usarlo como healthcheck de Railway.
 - ⚠️ **Secretos en historial de git**: purgar con `git filter-repo` antes de publicar el repo.
 - **Imágenes**: sin perfil dev/prod separado en el frontend para `environment-prod.ts` (requiere definir la API de Railway al desplegar).
-- **Tests**: **130 en verde** (repos + servicios + file storage + 10 controllers WebMvc + bootstraps). `VentasApplicationTests` (`@SpringBootTest`) solo corre contra una BD real accesible.
+- **Tests**: **153 en verde** con `-Dtest='!ComprasApplicationTests'` (repos + servicios + file storage + 12 controllers WebMvc + bootstraps). `ComprasApplicationTests` (`@SpringBootTest`) solo corre contra una BD real accesible.
 - Frontend: módulos **Clientes y Facturas descartados** (permisos eliminados). `Caja` sigue como placeholder porque su "hoja de corte" vive hoy en Reportes. `reversePayment` del backend no tiene UI (requiere un listado/detalle de pagos).
 - **BD local**: el CHECK `permissions_name_check` (generado por Hibernate para `@Enumerated`) NO se actualiza con `ddl-auto:update`. Al agregar permisos al enum el arranque puede fallar con "viola la restricción check" → droppear el constraint en BD local (`ALTER TABLE permissions DROP CONSTRAINT permissions_name_check`) o usar BD nueva. Con Flyway en `validate` el CHECK lo define la migración V1 (34) — mantenerla sincronizada con `PermissionName`.
 - **Código pendiente**: falta cambiar `System.out.println` de los bootstraps por un logger. ⚠️ Al estar trabajando entre máquinas, un AGENTS.md desactualizado hizo que otra laptop recreara `pingController`; ya está eliminado de nuevo (ver sesión 2026-09-17) — no recrearlo.
@@ -331,9 +503,15 @@ saltarse los `null` (por eso `validateDuplicates` normaliza antes).
 
 ```sh
 .\mvnw.cmd compile      # compilar
-.\mvnw.cmd test         # tests (H2; VentasApplicationTests requiere BD real)
+.\mvnw.cmd test         # tests (H2; ComprasApplicationTests requiere BD real)
 .\mvnw.cmd spring-boot:run   # arranca en http://localhost:8081
 ```
+
+> 💡 Para la suite completa en verde sin BD real:
+> `.\mvnw.cmd test -Dtest='!ComprasApplicationTests'` → 129/129.
+> `ComprasApplicationTests` es el único `@SpringBootTest` y exige una BD real
+> accesible; hoy `application-local.yaml` apunta al pooler de Supabase, que
+> rechaza la conexión (falla por credenciales, no es defecto del código).
 
 > ⚠️ **En otra máquina**: (1) recrear `src/main/resources/application-local.yaml`
 > (gitignored) con los valores REALES de dev — sin él la app no arranca. Apuntar a

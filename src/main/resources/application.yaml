@@ -1,5 +1,5 @@
 # ============================================================================
-#  Configuración de Ventas-Backend
+#  Configuración de Compras-Backend
 # ----------------------------------------------------------------------------
 #  REGLA DE ORO PARA GIT:
 #   Este archivo SÍ se sube al repositorio, pero DEBE permanecer SIN secretos.
@@ -23,6 +23,9 @@
 spring:
   application:
     name: compras
+
+  flyway:
+    placeholder-replacement: false
 
   # Perfil activo por defecto: "local". Así, al arrancar en tu máquina se carga
   # application-local.yaml (que contiene tus credenciales reales de dev).

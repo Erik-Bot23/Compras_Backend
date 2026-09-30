@@ -9,10 +9,10 @@
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.erikjarquin</groupId>
-	<artifactId>ventas</artifactId>
+	<artifactId>compras</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name/>
-	<description/>
+	<name>compras-backend</name>
+	<description>Backend del sistema de tienda de comida: POS local (Angular) + tienda online (Next.js) contra una sola BD.</description>
 	<url/>
 	<licenses>
 		<license/>

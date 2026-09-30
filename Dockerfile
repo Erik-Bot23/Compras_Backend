@@ -1,5 +1,5 @@
 # ============================================================================
-#  Dockerfile de Ventas-Backend (build multi-etapa)
+#  Dockerfile de Compras-Backend (build multi-etapa)
 # ----------------------------------------------------------------------------
 #  Por qué multi-etapa: Railway construye el contenedor desde este Dockerfile
 #  en un entorno limpio donde NO existe target/*.jar. La primera etapa compila
