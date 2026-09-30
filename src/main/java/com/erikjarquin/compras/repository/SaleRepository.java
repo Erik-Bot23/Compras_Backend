@@ -5,6 +5,7 @@ import java.util.List;
 
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -160,4 +161,26 @@ public interface SaleRepository extends JpaRepository<SaleEntity, Long> {
         ORDER BY s.saleDate DESC
     """)
     List<SaleEntity> findValidSalesByCashId(@Param("cashId") Long cashId);
+
+    /**
+     * Marca la venta como CONFIRMADA de forma <b>atómica y condicional</b> (V3).
+     *
+     * <p>Devuelve el número de filas afectadas: 1 si esta petición ganó la
+     * carrera, 0 si otra se adelantó. Mismo mecanismo que
+     * {@code PurchaseRepository.markConfirmedIfPending}, y por el mismo motivo:
+     * un {@code if (sale.isConfirmed())} lee la fila y decide en Java, así que
+     * dos peticiones simultáneas leen {@code false} antes de que ninguna escriba.
+     *
+     * <p>Aquí el daño de la carrera es menor que en las compras (no se duplica
+     * stock, solo se duplica una marca de tiempo), pero se corrige igual: un
+     * {@code confirmed_at} distinto del real sería evidencia contable falsa.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+        UPDATE SaleEntity s
+        SET s.confirmed = true,
+            s.confirmedAt = :when
+        WHERE s.id = :id AND s.confirmed = false AND s.cancelled = false
+    """)
+    int markConfirmedIfPending(@Param("id") Long id, @Param("when") LocalDateTime when);
 }

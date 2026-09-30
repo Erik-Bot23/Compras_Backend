@@ -19,6 +19,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.erikjarquin.compras.model.dto.Products.ProductDto;
 import com.erikjarquin.compras.service.ProductService;
+import com.erikjarquin.compras.util.InputValidator;
 
 /**
  * CRUD de productos (multipart para la imagen) y búsquedas.
@@ -49,35 +50,73 @@ public class ProductController {
         return service.getAll();
     }
     
-    //Crear un nuevo producto
+    /**
+     * Crear un nuevo producto.
+     *
+     * <p><b>price y stock llegan como String y no como BigDecimal/int (V3).</b> A
+     * propósito: para poder rechazar "1.875", "000.2" o "1e5" hay que mirar el
+     * TEXTO que escribió el usuario. Si Spring lo convirtiese primero, "000.2"
+     * ya habría llegado como {@code 0.2} y el cero a la izquierda se habría
+     * perdido. Convertir aquí y devolver un 400 con el motivo exacto es lo que
+     * hace que el error se vea y no se acepte en silencio.
+     */
     @PreAuthorize("hasAuthority('CREAR_PRODUCTOS')")
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ProductDto saveProduct(
         @RequestParam("name") String name,
-        @RequestParam("price") BigDecimal price,
-        @RequestParam("stock") int stock,
+        @RequestParam("price") String price,
+        @RequestParam("stock") String stock,
         @RequestParam("categoryId") Long categoryId,
         @RequestParam("sku") String sku,
         @RequestParam("barcode") String barcode,
         @RequestParam(value = "image", required = false) MultipartFile image
     ){
-        return service.save(name, price, stock, categoryId, sku, barcode, image); 
+        BigDecimal precio = InputValidator.precio(price, "precio");
+        Integer existencias = InputValidator.entero(stock, "stock");
+
+        if(existencias == null){
+            throw new IllegalArgumentException("El stock es obligatorio");
+        }
+
+        return service.save(
+            name,
+            precio,
+            existencias,
+            categoryId,
+            InputValidator.sku(sku),
+            InputValidator.barcode(barcode),
+            image);
     }
 
-    //Editar un producto
+    //Editar un producto (mismas validaciones que al crear: ver el javadoc de saveProduct)
     @PreAuthorize("hasAuthority('EDITAR_PRODUCTOS')")
     @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ProductDto updateProduct(
         @PathVariable Long id,
         @RequestParam String name,
-        @RequestParam BigDecimal price,
-        @RequestParam int stock,
+        @RequestParam String price,
+        @RequestParam String stock,
         @RequestParam Long categoryId,
         @RequestParam String sku,
         @RequestParam String barcode,
         @RequestParam(value = "image", required = false) MultipartFile image
     ){
-        return service.update(id, name, price, stock, categoryId, sku, barcode, image);
+        BigDecimal precio = InputValidator.precio(price, "precio");
+        Integer existencias = InputValidator.entero(stock, "stock");
+
+        if(existencias == null){
+            throw new IllegalArgumentException("El stock es obligatorio");
+        }
+
+        return service.update(
+            id,
+            name,
+            precio,
+            existencias,
+            categoryId,
+            InputValidator.sku(sku),
+            InputValidator.barcode(barcode),
+            image);
     }
 
     //Eliminar producto con el ID

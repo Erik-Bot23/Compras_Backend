@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 
 import com.erikjarquin.compras.exceptions.ProviderException;
 import com.erikjarquin.compras.mapper.ProviderMapper;
+import com.erikjarquin.compras.util.InputValidator;
 import com.erikjarquin.compras.model.dto.Purchases.ProviderDto;
 import com.erikjarquin.compras.model.entity.ProviderEntity;
 import com.erikjarquin.compras.repository.ProviderRepository;
@@ -71,8 +72,8 @@ public class ProviderImpl implements ProviderService {
             }
         });
 
-        entity.setName(dto.getName());
-        entity.setRfc(dto.getRfc());
+entity.setName(normalizarNombre(dto.getName()));
+        entity.setRfc(InputValidator.rfc(dto.getRfc()));
         entity.setPhone(dto.getPhone());
         entity.setEmail(dto.getEmail());
 
@@ -107,5 +108,20 @@ public class ProviderImpl implements ProviderService {
         if(dto.getRfc() == null || dto.getRfc().trim().isEmpty()){
             throw new IllegalArgumentException("El RFC del proveedor es obligatorio");
         }
+    }
+
+    /**
+     * Normaliza el nombre del proveedor: recorta y pasa a MAYÚSCULAS.
+     *
+     * <p>El nombre del proveedor sí va en mayúsculas (a diferencia del nombre de
+     * los productos): es un dato corto, casi siempre una razón social, y en
+     * mayúsculas se ve uniforme en las tablas y evita que "Dairy Queen" y
+     * "DAIRY QUEEN" se guarden como dos proveedores distintos.
+     *
+     * <p>Recortar es lo importante: los espacios al final invisiblemente rompen
+     * el UNIQUE del RFC cuando se busca por duplicado.
+     */
+    private String normalizarNombre(String nombre){
+        return nombre == null ? null : nombre.trim().toUpperCase();
     }
 }

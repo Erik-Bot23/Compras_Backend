@@ -376,7 +376,7 @@ public class SaleImpl implements SaleService {
      */
     @Override
     @Transactional
-    public SaleHistoryResponse confirm(Long saleId){
+public SaleHistoryResponse confirm(Long saleId){
         SaleEntity sale = findSaleOrThrow(saleId);
 
         //Una venta anulada es terminal en la otra dirección: no se "revive".
@@ -385,15 +385,24 @@ public class SaleImpl implements SaleService {
                 "No se puede confirmar una venta que ya fue anulada", HttpStatus.CONFLICT);
         }
 
-        if(sale.isConfirmed()){
-            //Ya está en el estado pedido: no es un error, es idempotencia.
+        // ===== V3: ganar la carrera de forma atómica =====
+        //El UPDATE condicional y la comprobación de arriba NO son redundantes: la
+        //de arriba es una regla de negocio (no se revive una venta anulada) que se
+        //lee en Java, y la de abajo es la garantía de concurrencia. El
+        //"cancelled = false" del WHERE cubre también el caso en que otra
+        //transacción anule entre la lectura y este UPDATE.
+        int filasAfectadas = saleRepository.markConfirmedIfPending(saleId, LocalDateTime.now());
+
+        //0 filas = ya estaba confirmada (doble clic, reintento, o carrera perdida).
+        //No es un error: es idempotencia. Y lo importante es que NO se escribe nada.
+        if(filasAfectadas == 0){
             log.info("Venta {} ya estaba confirmada: operación idempotente.", saleId);
             return mapper.toHistoryResponse(sale);
         }
 
-        sale.setConfirmed(true);
-        sale.setConfirmedAt(LocalDateTime.now());
-        SaleEntity saved = saleRepository.save(sale);
+        //Recarga para devolver el DTO con confirmed = true y confirmedAt real: el
+        //flag ya quedó escrito por el UPDATE del repositorio.
+        SaleEntity saved = saleRepository.findById(saleId).orElseThrow();
 
         log.info("Venta {} confirmada. Queda congelada: ya no se puede anular.", saleId);
         return mapper.toHistoryResponse(saved);

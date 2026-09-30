@@ -18,7 +18,7 @@
 
 Capas: `controller/ → service/ (interfaz) → service/impl/ → repository/ → model/entity/`. DTOs en `model/dto/`, Mappers en `mapper/` (algunos estáticos, otros `@Component`), config en `config/`, excepciones en `exceptions/`.
 
-- **12 controllers, 64 endpoints** bajo `/api/local/...` (el prefijo `/api/tienda/**` del storefront **nace en la Fase 3**)
+- **12 controllers, 68 endpoints** bajo `/api/local/...` (el prefijo `/api/tienda/**` del storefront **nace en la Fase 3**)
 - **Prefijos de dominio** (ver `docs/PLAN.md` §1-§2): `/api/local/**` = POS/gestión del empleado (Angular) · `/api/tienda/**` = cliente (Next.js) · `/api/uploads/**` = estático, público y compartido por ambos
 - Autorización por permiso vía `@PreAuthorize("hasAuthority('...')")` (**37 permisos** en `PermissionName`: los 34 de siempre + `CONFIRMAR_VENTAS`/`CANCELAR_VENTAS` (V2) + `CONFIRMAR_COMPRAS` (V3), los tres el 2026-09-30)
 - 4 `CommandLineRunner` de bootstrap (orden): `RoleBootstrap` → `AdminBootstrap` → `PermissionBootstrap` → `RolePermissionBootstrap`. Todos respetan el flag `app.seed-bootstraps` (`APP_SEED_BOOTSTRAPS`, default `true`) y siembran **solo si está vacío** (NO self-healing; ver 2026-09-17 (2)).
@@ -39,10 +39,10 @@ Base de los 12 módulos = `/api/local`:
 | Categories | `/api/local/categories` | CRUD |
 | Sales | `/api/local/sales` | POST (efectivo/transit/tarjeta), GET, PATCH `/{id}/confirm`, PATCH `/{id}/cancel` |
 | Payments | `/api/local/payments` | card, status/{tx}, retry/{id}, reverse/{id} |
-| Purchases | `/api/local/purchases` | GET (todos, por proveedor, detalle), POST, DELETE (cancelar) |
+| Purchases | `/api/local/purchases` | GET (todos, por proveedor, detalle), POST (nace PENDIENTE), PATCH `/{id}/confirm`, DELETE (cancelar) |
 | Providers | `/api/local/providers` | CRUD |
-| Cash | `/api/local/cash` | open, close, summary, active |
-| Reports | `/api/local/reports` | trend, top-products, payment-methods, categories, low-stock, **margins**, summary (todas con `VER_REPORTES`) |
+| Cash | `/api/local/cash` | create, open (por número), close (exige cuadrar), summary, active, history, available, next-number, number/`{number}` |
+| Reports | `/api/local/reports` | trend, top-products, payment-methods, categories, low-stock, **margins**, summary, **profit**, **cash/`{cashId}`** (todas con `VER_REPORTES`) |
 | Uploads | `/api/uploads/**` | **Público** — imágenes de platillos/productos. **FUERA** de `/api/local` a propósito: el storefront las necesita públicas |
 
 ## Estado de módulos
@@ -55,6 +55,161 @@ Base de los 12 módulos = `/api/local`:
 - **Tienda de comida (Fases 2-8, PENDIENTES)**: siguen sin existir `Insumo`, `Platillo`, `RecetaDetalle`, `Cliente`, `Pedido`, `DetallePedido`, el rol CLIENTE ni WebSocket. Ver `docs/PLAN.md`.
 
 ## Registro de cambios / decisiones
+
+### 2026-09-30 (4) — Precio de venta, caja que cuadra, validaciones y estilos
+
+> Encargo de 7 puntos. El común denominador: **nada se contabiliza sin que un humano
+> lo confirme, y nada se guarda si no es un dato posible**. 3 de los 7 puntos
+> resultaron ser **el mismo bug** (ver §3) y 2 eran reglas de negocio nuevas.
+
+**0. Las 4 decisiones que tomé y por qué las planteé**
+
+El encargo era ambiguo en 4 puntos. Antes de escribir código las aclaré con el usuario,
+porque implementarlas "como semké" habría costado más rehacerlas:
+
+| Punto | Ambiguidad | Decisión | Por qué la otra opción era peor |
+|---|---|---|---|
+| 5.1 | "no dejes cerrar si no cuadra" | **Bloquear + salida de emergencia con motivo** | Bloquear en seco deja el turno encerrado si el cajero se equivocó al contar |
+| 3 | ¿"precio de venta" escribe `product.price`? | **Sí, al confirmar** | El usuario aclaró el flujo real (abajo). El "no" era mi regla anterior documentada |
+| 7.6 | Barcode/SKU "solo enteros" | **Barcode = texto numérico** | Como número, `0001234567895` → `1234567895` y el lector deja de funcionar |
+| 7.4 | Mayúsculas en "todos los inputs" | **Solo campos de código** | "TACOS DE CHICHARRÓN" se lee peor; los nombres de producto quedan normales |
+
+⚠️ **Cambio de regla de negocio (punto 3).** Hasta esta sesión el código documentaba
+que el módulo de compras **NUNCA** escribía `product.price` ("es decisión comercial del
+dueño"). El usuario aclaró el flujo real y es otro: *"al crear un producto por primera
+vez das el precio, y cuando haces una compra para reabastecer escribes el precio de
+compra al proveedor y también el precio de venta, que puede seguir igual o subirlo; lo
+que se actualiza en productos es solo el stock y el precio"*. **Implementado como lo dijo.**
+`unit_price` es **nullable**, y NULL significa *"esta compra no opina sobre el precio"* →
+confirmar conserva el actual. Un NOT NULL con default 0 dejaría productos gratis.
+
+**1. `purchase_details.unit_price` (V3) — el precio de venta del renglón**
+
+`PurchaseItemRequest/DTO/Entity` ganan `unitPrice`. Se guarda al **registrar** (para que
+la compra pendiente ya muestre el precio que se aplicará) y `confirm()` lo copia a
+`product.price`. Compras y productos siguen tablas separadas: la compra **historiza** la
+decisión, el producto guarda el **vigente**. Por eso `margins` (costo vs precio) refleja
+el último precio confirmado.
+
+**2. `cash_registers.difference_reason` (V3) + caja pre-creada (punto 5)**
+
+- El cierre **exige cuadrar** (`difference != 0` y sin motivo → **409**, la caja sigue
+  abierta). Con motivo → cierra y guarda diferencia + motivo. El motivo va **junto** a la
+  diferencia porque "me sobraron 200" y "me faltaron 200" son opuestos con el mismo síntoma.
+- Si cuadra exactamente, el motivo se **limpia** (no queda colgado de una versión previa).
+- **`POST /api/local/cash` crea la caja** (nace con `opened_at NULL`), y `POST /open` ahora
+  **elige una existente**. El número debe existir antes para poder elegirlo de una lista.
+- **`getNextSuggestedNumber()`** devuelve "CAJA n" para prellenar el modal.
+- **Una caja se abre UNA sola vez** (409 si `openedAt != NULL`). Como el número es UNIQUE
+  hay una fila por caja física: reabrir "CAJA 1" **mezclaría dos turnos** en un mismo corte.
+  ⚠️ Es la misma razón por la que existe el filtro por caja de Reportes.
+- Fondo mínimo **100**, no negativo (V1 ya tenía `opened_at`/`opening_amount` nullable, así
+  que no hizo falta alterar la tabla para cajas sin abrir).
+
+**3. 🐛 El `if` NO daba idempotencia — era la carrera del stock duplicado**
+
+Este fue el hallazgo técnico más importante, y **también era un bug en `SaleImpl.confirm()`
+desde V2**. Un `if(entity.isConfirmed())` resuelve el reintento **secuencial** (doble clic)
+pero **no** el **simultáneo**:
+
+```
+T1: lee confirmed=false ─┐
+T2: lee confirmed=false ─┴─→ las dos pasan el if → las dos suman stock
+```
+
+**Arreglo: `UPDATE ... WHERE confirmed = false` que devuelve las filas afectadas**
+(`markConfirmedIfPending`). `1` = esta ganó y aplica stock; `0` = otra se adelantó y
+**no toca nada**. El `if` **se queda** (atiende el secuencial); el UPDATE atiende el
+concurrente. **Elegí UPDATE condicional sobre `@Lock(PESSIMISTIC_WRITE)`** porque no
+mantiene un lock de fila abierto durante todo el `@Transactional` (incluidos los `save()`
+de cada producto) y no depende de que nadie anote el método de lectura.
+
+Efecto lateral discovered: tras el UPDATE la entidad en memoria quedaba obsoleta, así que
+se **refleja el estado sobre ella** en vez de releer la BD (un query menos). El timestamp
+se calcula **una vez** y se usa para ambos, para que el `confirmedAt` guardado coincida con
+el que ve el usuario.
+
+**4. `util/InputValidator.java` (nuevo) + `validadores.ts` (nuevo) — punto 7**
+
+El punto central: **se valida el TEXTO, no el número ya parseado**, porque `new
+BigDecimal("000.2")` es `0.2` y `"1.875"` es `1.875`: los ceros iniciales y el tercer
+decimal **se pierden antes de poder detectarlos**. Por eso `ProductController` recibe
+`price`/`stock` como **`String`** y no `BigDecimal`/`int`.
+
+| Campo | Regla | Por qué |
+|---|---|---|
+| stock | entero, ≥0 | No existe 1.6 de jabón. `numeric(38,2)` además |
+| precio | ≥0, máx **2** decimales | `1.875` se redondearía a 1.88 **en silencio** |
+| ambos | sin `1e5` | `<input type=number>` **acepta** `e`/`E`: un error de dedo → 100,000 |
+| ambos | sin ceros iniciales | `000.2` es error de dedo. Un `0` solo **sí** vale |
+| SKU | letras + `-_./`, máx 50 | Un SKU **no** es un número |
+| barcode | solo dígitos, máx 20, **texto** | Identificador: como número pierde los ceros |
+| RFC | letras+números, máx 13 | RFC mexicano: 13 física / 12 moral |
+| códigos | MAYÚSCULAS | "choc-500" y "CHOC-500" no pueden ser 2 SKUs |
+
+**Duplicado a propósito (defensa en profundidad)**: el frontend es la UX (error mientras
+escribes), el backend es la **frontera de confianza** (un script no se salta nada).
+Los pegados se sanean **aparte** del `keydown` porque **pegar NO dispara `keydown`**.
+
+**5. 🐛 Bug de paso: el SKU PROHUBÍA letras**
+
+Tenía `pattern="[0-9]"` **y** `replace(/\D/g,'')` → "CHOC-500" se volvía **"500"**, otro
+producto. El `pattern` además **nunca hizo nada** (sin `<form>` nativo Angular no lo
+valida). Corregido al aplicar 7.2. El barcode **no** se tocó en ese sentido.
+
+**6. Frontend**
+
+- **Compras**: 3 columnas con título (Cantidad / Costo de compra / **Precio de venta**), el
+  precio se autocompleta con el del producto y se puede cambiar; `.linea-cabecera` para que
+  no se confundan. Detalle con margen por renglón (**rojo si es negativo** = estás vendiendo
+  más barato de lo que compras). **Botón Confirmar con estilo propio** (verde, más alto, con
+  sombra): es la acción de la que depende que el stock exista, y *un botón que no se
+  encuentra es peor que uno que no existe*. `.delete-linea` para el botón de quitar renglón.
+- **Caja**: botón **Crear caja** (modal con Crear/Cancelar, número precargado con la
+  sugerencia del backend), **selector** de cajas disponibles en "Abrir", **"Caja: N"** visible,
+  y **contador en vivo** (`efectivoAcumulado` = fondo + efectivo) que se recalcula solo por
+  ser un getter. En el cierre: si cuadra lo dice en verde; si no, aparece el **campo de
+  motivo** en ámbar (salida de emergencia).
+- **Historial**: quité las columnas **Estado** y **Acciones** (punto 2). El historial es una
+  consulta, no una mesa de trabajo. `colSpan` pasó a **fijo 6** (ya no depende de permisos).
+  El ciclo de vida no se perdió: la venta anulada sigue con la fila tachada, y los endpoints
+  siguen existiendo.
+- **Sidebar**: `.active` con fondo + barra de 3px. `esActiva()` compara **exacto** (con
+  `includes`, "/sales" matchearía "/sales-history") y limpia el query string.
+- **Perfil y productos**: foto 48px con borde doble y sombra; imágenes de producto con marco,
+  fondo gris (si falla la carga, no sale ícono roto) y `hover` que amplía. **"Eliminar"
+  (rojo sólido, irreversible) vs "Dar de baja" (ámbar, reversible)** diferenciados.
+- **Explicaciones (punto 4)**: bloques `.aviso-explicacion` en **Reportes** (de dónde sale
+  Ingresos / Costo de lo vendido / Utilidad, y por qué NO son las compras) y en **Márgenes**
+  (con la advertencia de que margen ≠ utilidad).
+
+**7. Tests: 173 → 234** (+61)
+
+`CashRegisterV3Test` (19, nuevo) · `InputValidatorTest` (30, nuevo, con `@Nested` por campo) ·
+`PurchaseImplTest` (11→13) · `CashRegisterControllerTest` (12→21) ·
+`PurchaseControllerTest` (+4) · `ReportControllerTest` (+5) · `ReportQueryTest` (+4).
+
+Dos tests que documentan decisiones:
+- `confirmarCompra_carreraConOtraPeticion_NoSumaStockDosVeces`: la entidad de la 2ª petición
+  dice `confirmed=false` en memoria (un `if` la habría dejado sumar); el `UPDATE` devuelve 0.
+- `validarLinea`/`CHOC/500/1/2/x`: **falló porque mi expectativa estaba mal** (`/` SÍ es
+  separador válido). Corregí el test, no el código — tocar el validador para satisfacer una
+  expectativa inventada habría **quitado un separador válido del SKU**.
+
+**8. PDF en `docs/`**
+
+`04-Precio-Venta-Caja-Cuadra-Validaciones.pdf` (17 pág.) — incluye la **tabla de relaciones**
+(qué columna escribe quién y quién la lee) porque las 7 partes no son independientes.
+
+**Pendientes / debilidades conocidas**
+
+1. ⚠️ Sigue sin `CHECK NOT (confirmed AND cancelled)` para ventas **ni compras**. Va en **V4**.
+2. ⚠️ El cierre de caja guarda el motivo como **texto libre**: no lo clasifica. Un análisis
+   posterior ("me faltó vs me sobró") sería otro módulo.
+3. Validaciones solo en **productos y proveedores**. Categoría y otros siguen con las reglas
+   viejas; aplicarlas es **añadir handlers**, no reinventar (los validadores ya existen).
+4. La caja no sabe quién la abrió (decisión tomada, no olvido).
+5. El backfill de `sale_details.unit_cost` sigue siendo **aproximación** (costo actual).
 
 ### 2026-09-30 (3) — V3: confirmar compras, costo congelado, cajas numeradas y utilidad
 
@@ -492,7 +647,7 @@ tocar nada. Si se confirman como opcionales, no hay que rehacer este código.
 - ⚠️ **`/ping` sigue sin existir** — no usarlo como healthcheck de Railway.
 - ⚠️ **Secretos en historial de git**: purgar con `git filter-repo` antes de publicar el repo.
 - **Imágenes**: sin perfil dev/prod separado en el frontend para `environment-prod.ts` (requiere definir la API de Railway al desplegar).
-- **Tests**: **153 en verde** con `-Dtest='!ComprasApplicationTests'` (repos + servicios + file storage + 12 controllers WebMvc + bootstraps). `ComprasApplicationTests` (`@SpringBootTest`) solo corre contra una BD real accesible.
+- **Tests**: **234 en verde** con `-Dtest='!ComprasApplicationTests'` (repos + servicios + file storage + 12 controllers WebMvc + bootstraps). `ComprasApplicationTests` (`@SpringBootTest`) solo corre contra una BD real accesible.
 - Frontend: módulos **Clientes y Facturas descartados** (permisos eliminados). `Caja` sigue como placeholder porque su "hoja de corte" vive hoy en Reportes. `reversePayment` del backend no tiene UI (requiere un listado/detalle de pagos).
 - **BD local**: el CHECK `permissions_name_check` (generado por Hibernate para `@Enumerated`) NO se actualiza con `ddl-auto:update`. Al agregar permisos al enum el arranque puede fallar con "viola la restricción check" → droppear el constraint en BD local (`ALTER TABLE permissions DROP CONSTRAINT permissions_name_check`) o usar BD nueva. Con Flyway en `validate` el CHECK lo define la migración V1 (34) — mantenerla sincronizada con `PermissionName`.
 - **Código pendiente**: falta cambiar `System.out.println` de los bootstraps por un logger. ⚠️ Al estar trabajando entre máquinas, un AGENTS.md desactualizado hizo que otra laptop recreara `pingController`; ya está eliminado de nuevo (ver sesión 2026-09-17) — no recrearlo.

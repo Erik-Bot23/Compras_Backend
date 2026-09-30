@@ -50,7 +50,7 @@ controller/ → service/ (interfaz) → service/impl/ → repository/ → model/
    model/dto/  config/  exceptions/  jobs/
 ```
 
-- **12 controllers · 64 endpoints** bajo `/api/local/...`.
+- **12 controllers · 68 endpoints** bajo `/api/local/...`.
 - **37 permisos** en `PermissionName` (ver tabla de endpoints).
 - Bootstraps de arranque (respetan `APP_SEED_BOOTSTRAPS`): `RoleBootstrap` →
   `AdminBootstrap` → `PermissionBootstrap` → `RolePermissionBootstrap`. Siembran
@@ -88,7 +88,7 @@ Módulo → base bajo el prefijo `/api/local`:
 | Payments | `/api/local/payments` | card, status/{tx}, retry/{id}, reverse/{id} |
 | Purchases | `/api/local/purchases` | GET (todos, por proveedor, detalle), POST (nace PENDIENTE), PATCH `/{id}/confirm`, DELETE (cancelar) |
 | Providers | `/api/local/providers` | CRUD |
-| Cash | `/api/local/cash` | open, close, summary, active, history, number/`{number}` |
+| Cash | `/api/local/cash` | create, open (por número), close (exige cuadrar), summary, active, history, available, next-number, number/`{number}` |
 | Reports | `/api/local/reports` | trend, top-products, payment-methods, categories, low-stock, **margins**, summary, **profit**, **cash/`{cashId}`** (`VER_REPORTES`) |
 | Uploads | `/api/uploads/**` | **Público** — sirve imágenes de productos |
 
@@ -196,12 +196,14 @@ Compras-Backend/
 - El esquema lo crea **Flyway** (`db/migration/V1__init.sql` = base,
   `V2__venta_confirmada.sql` = ciclo de vida de la venta,
   `V3__compras_confirmadas_costo_y_cajas.sql` = compras confirmadas + costo
-  congelado + cajas numeradas), no Hibernate. Al agregar permisos nuevos al enum
+  congelado + cajas numeradas + precio de venta + cuadre de caja), no Hibernate.
+  Al agregar permisos nuevos al enum
   hay que mantener sincronizado el CHECK `permissions_name_check` de las
   migraciones.
 - `ComprasApplicationTests` (`@SpringBootTest`) es el único test que NO corre en
   la suite: exige una BD real accesible. Usa
-  `mvn test -Dtest='!ComprasApplicationTests'` para los 173 tests de lógica.
+  `mvn test -Dtest='!ComprasApplicationTests'` para los 234 tests de lógica.
 - Documentación técnica en [`docs/`](./docs): `01-Fase1-Paquete-Compras-y-Prefijo-Api-Local.pdf`,
-  `02-Ciclo-Ventas-Integridad-Stock-Compras.pdf` y
-  `03-Confirmar-Compras-Utilidad-Cajas-Numeradas.pdf`, con el código real de los archivos.
+  `02-Ciclo-Ventas-Integridad-Stock-Compras.pdf`,
+  `03-Confirmar-Compras-Utilidad-Cajas-Numeradas.pdf` y
+  `04-Precio-Venta-Caja-Cuadra-Validaciones.pdf`, con el código real de los archivos.

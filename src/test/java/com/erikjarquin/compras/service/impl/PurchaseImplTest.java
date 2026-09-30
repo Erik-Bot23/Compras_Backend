@@ -3,6 +3,7 @@ package com.erikjarquin.compras.service.impl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -178,8 +179,8 @@ class PurchaseImplTest {
 
         when(purchaseRepository.findDetailedById(5L)).thenReturn(Optional.of(purchase));
         when(productRepository.findById(10L)).thenReturn(Optional.of(cafe));
-        when(purchaseRepository.save(any(PurchaseEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        //1 fila afectada = esta petición ganó la carrera y SÍ aplica el stock.
+        when(purchaseRepository.markConfirmedIfPending(eq(5L), any())).thenReturn(1);
 
         PurchaseDTO dto = purchaseService.confirm(5L);
 
@@ -187,24 +188,34 @@ class PurchaseImplTest {
         assertThat(cafe.getStock()).isEqualTo(8);
         assertThat(cafe.getCost()).isEqualByComparingTo("40");
 
-        // Queda CONFIRMADA y con fecha de confirmación
         assertThat(dto.isConfirmed()).isTrue();
         assertThat(dto.getConfirmedAt()).isNotNull();
 
         verify(productRepository).save(cafe);
-        verify(purchaseRepository).save(purchase);
     }
 
     /**
-     * Confirmar dos veces NO debe sumar el stock dos veces.
+     * <b>LA CARRERA DE STOCK DUPLICADO (V3).</b> Este es el test que blinda el
+     * arreglo de concurrencia.
      *
-     * <p>Es el test que blinda la idempotencia: el doble clic o el reintento
-     * tras un corte de red son el caso normal en un POS, y "devolver el stock
-     * dos veces" es exactamente el tipo de error que nadie nota hasta que el
-     * inventario no cuadra.
+     * <p>Simula exactamente lo que pasa con dos peticiones simultáneas:
+     * <ol>
+     *   <li>La petición A llega primero: su {@code markConfirmedIfPending} actualiza
+     *       1 fila, porque la compra estaba pendiente.</li>
+     *   <li>La petición B llega con la compra <b>todavía cacheada como pendiente</b>
+     *       (leída antes de que A escribiera), pero al ejecutar su UPDATE la
+     *       condición {@code confirmed = false} ya no se cumple y devuelve
+     *       <b>0 filas</b>.</li>
+     * </ol>
+     *
+     * <p>El detalle que hace el test valioso: la entidad en memoria de B todavía
+     * dice {@code confirmed = false}, o sea que un {@code if (entity.isConfirmed())}
+     * <b>la habría dejado sumar el stock y la mercancía quedaría duplicada</b>. Lo
+     * que la salva es que el código decide por el número de filas afectadas, no
+     * por el estado que leyó.
      */
     @Test
-    void confirmarCompra_yaConfirmada_esIdempotenteYNoSumaStockDosVeces(){
+    void confirmarCompra_carreraConOtraPeticion_NoSumaStockDosVeces(){
         ProductEntity cafe = product(10L, "Café 1kg", 8);
 
         PurchaseDetailEntity detail = new PurchaseDetailEntity();
@@ -212,28 +223,34 @@ class PurchaseImplTest {
         detail.setQuantity(3);
         detail.setUnitCost(new BigDecimal("40"));
 
-        PurchaseEntity purchase = new PurchaseEntity();
-        purchase.setId(5L);
-        purchase.setConfirmed(true);
-        purchase.setDetails(List.of(detail));
+        //La compra que ve la SEGUNDA petición: aún marcada como pendiente en
+        //memoria, porque la leyó antes de que la primera escribiera.
+        PurchaseEntity vistaPorLaSegunda = new PurchaseEntity();
+        vistaPorLaSegunda.setId(5L);
+        vistaPorLaSegunda.setConfirmed(false);
+        vistaPorLaSegunda.setDetails(List.of(detail));
 
-        when(purchaseRepository.findDetailedById(5L)).thenReturn(Optional.of(purchase));
+        when(purchaseRepository.findDetailedById(5L)).thenReturn(Optional.of(vistaPorLaSegunda));
+        //0 filas = alguien más confirmó primero. ESTE es el valor que manda.
+        when(purchaseRepository.markConfirmedIfPending(eq(5L), any())).thenReturn(0);
 
         PurchaseDTO dto = purchaseService.confirm(5L);
 
-        assertThat(dto.isConfirmed()).isTrue();
+        assertThat(dto.isConfirmed()).isFalse();
+
         assertThat(cafe.getStock())
-                .as("una compra ya confirmada no vuelve a sumar stock")
+                .as("la segunda petición NO debe sumar stock aunque su copia diga pendiente")
                 .isEqualTo(8);
 
-        // Cero escrituras: ni del producto ni de la compra
+        //Ni el producto ni la compra se escriben
         verify(productRepository, never()).save(any(ProductEntity.class));
-        verify(purchaseRepository, never()).save(any(PurchaseEntity.class));
+        verify(productRepository, never()).findById(any());
     }
 
     @Test
     void confirmarCompra_inexistenteLanza404(){
         when(purchaseRepository.findDetailedById(404L)).thenReturn(Optional.empty());
+        when(purchaseRepository.markConfirmedIfPending(eq(404L), any())).thenReturn(0);
 
         assertThatThrownBy(() -> purchaseService.confirm(404L))
                 .isInstanceOf(PurchaseException.class)
@@ -262,8 +279,7 @@ class PurchaseImplTest {
         when(purchaseRepository.findDetailedById(9L)).thenReturn(Optional.of(purchase));
         when(productRepository.findById(10L)).thenReturn(Optional.of(leche));
         when(productRepository.findById(11L)).thenReturn(Optional.of(cafe));
-        when(purchaseRepository.save(any(PurchaseEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(purchaseRepository.markConfirmedIfPending(eq(9L), any())).thenReturn(1);
 
         purchaseService.confirm(9L);
 
@@ -272,6 +288,75 @@ class PurchaseImplTest {
         assertThat(leche.getCost()).isEqualByComparingTo("25");
         assertThat(cafe.getCost()).isEqualByComparingTo("40");
         verify(productRepository, times(2)).save(any(ProductEntity.class));
+    }
+
+    // =========================================================================
+    //  El precio de VENTA del renglón (V3) — se escribe al CONFIRMAR
+    // =========================================================================
+
+    /**
+     * Confirmar actualiza <b>las dos</b> columnas del producto: el stock y el
+     * precio de venta. Es el cambio de regla que pidió el dueño: al reponer stock
+     * se escribe también a qué precio se va a vender ese lote.
+     */
+    @Test
+    void confirmarCompra_actualizaStockCostoYPrecioDeVenta(){
+        ProductEntity cafe = product(10L, "Café 1kg", 5);
+        cafe.setCost(new BigDecimal("35")); //costo anterior
+        cafe.setPrice(new BigDecimal("150")); //precio anterior
+
+        PurchaseDetailEntity detail = new PurchaseDetailEntity();
+        detail.setProduct(cafe);
+        detail.setQuantity(3);
+        detail.setUnitCost(new BigDecimal("40"));  //nuevo costo
+        detail.setUnitPrice(new BigDecimal("165")); //nuevo precio de venta
+
+        PurchaseEntity purchase = new PurchaseEntity();
+        purchase.setId(5L);
+        purchase.setDetails(List.of(detail));
+
+        when(purchaseRepository.findDetailedById(5L)).thenReturn(Optional.of(purchase));
+        when(productRepository.findById(10L)).thenReturn(Optional.of(cafe));
+        when(purchaseRepository.markConfirmedIfPending(eq(5L), any())).thenReturn(1);
+
+        purchaseService.confirm(5L);
+
+        assertThat(cafe.getStock()).isEqualTo(8);
+        assertThat(cafe.getCost()).isEqualByComparingTo("40");
+        assertThat(cafe.getPrice()).isEqualByComparingTo("165");
+    }
+
+    /**
+     * Si el renglón NO trae precio de venta (null), el producto conserva el que
+     * ya tenía.
+     *
+     * <p>Es lo que hace que el campo sea opcional de verdad: un cliente que no
+     * llena la caja no debe ver el producto con precio 0.
+     */
+    @Test
+    void confirmarCompra_sinPrecioDeVenta_conservaElQueTenia(){
+        ProductEntity cafe = product(10L, "Café 1kg", 5);
+        cafe.setPrice(new BigDecimal("150"));
+
+        PurchaseDetailEntity detail = new PurchaseDetailEntity();
+        detail.setProduct(cafe);
+        detail.setQuantity(3);
+        detail.setUnitCost(new BigDecimal("40"));
+        detail.setUnitPrice(null); //el usuario no lo llenó
+
+        PurchaseEntity purchase = new PurchaseEntity();
+        purchase.setId(5L);
+        purchase.setDetails(List.of(detail));
+
+        when(purchaseRepository.findDetailedById(5L)).thenReturn(Optional.of(purchase));
+        when(productRepository.findById(10L)).thenReturn(Optional.of(cafe));
+        when(purchaseRepository.markConfirmedIfPending(eq(5L), any())).thenReturn(1);
+
+        purchaseService.confirm(5L);
+
+        assertThat(cafe.getPrice())
+                .as("null significa 'no opina sobre el precio': se conserva el actual")
+                .isEqualByComparingTo("150");
     }
 
     // =========================================================================

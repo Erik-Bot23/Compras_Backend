@@ -3,6 +3,7 @@ package com.erikjarquin.compras.service.impl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -144,20 +145,44 @@ class SaleImplLifecycleTest {
     // ===================== CONFIRMAR =====================
 
     @Test
-    void confirmar_marcaConfirmadaYPonFecha(){
-        SaleEntity venta = ventaAbierta(1L, PaymentMethod.CASH, List.of());
-        when(saleRepository.findById(1L)).thenReturn(Optional.of(venta));
-        when(saleRepository.save(any(SaleEntity.class)))
-                .thenAnswer(i -> i.getArgument(0));
+void confirmar_marcaConfirmadaYPonFecha(){
+   SaleEntity venta = ventaAbierta(1L, PaymentMethod.CASH, List.of());
+   when(saleRepository.findById(1L)).thenReturn(Optional.of(venta));
+   //1 fila afectada = esta petición ganó la carrera y confirma de verdad.
+   when(saleRepository.markConfirmedIfPending(eq(1L), any())).thenReturn(1);
+   //El repositorio devuelve la venta YA marcada: el flag lo escribió el UPDATE
+   //condicional, no el servicio sobre la entidad en memoria.
+   when(saleRepository.findById(1L)).thenAnswer(i -> {
+      venta.setConfirmed(true);
+      venta.setConfirmedAt(java.time.LocalDateTime.now());
+      return Optional.of(venta);
+   });
 
-        SaleHistoryResponse r = saleService.confirm(1L);
+   SaleHistoryResponse r = saleService.confirm(1L);
 
-        assertThat(r.isConfirmed()).isTrue();
-        assertThat(r.getConfirmedAt())
-                .as("debe registrar el momento de la confirmación")
-                .isNotNull();
-        assertThat(venta.isConfirmed()).isTrue();
-    }
+   assertThat(r.isConfirmed()).isTrue();
+   assertThat(r.getConfirmedAt())
+   .as("debe registrar el momento de la confirmación")
+   .isNotNull();
+}
+
+   /**
+    * Carrera entre dos confirmaciones simultáneas (V3).
+    *
+    * <p>La segunda petición ejecuta su UPDATE y obtiene 0 filas porque la primera
+    * ya confirmó. Debe devolver 200 con la venta confirmada (idempotencia) y NO
+    * escribir nada, aunque su copia en memoria diga que sigue abierta.
+    */
+   @Test
+   void confirmar_carreraConOtraPeticion_noEscribeNada(){
+   SaleEntity venta = ventaAbierta(1L, PaymentMethod.CASH, List.of());
+   when(saleRepository.findById(1L)).thenReturn(Optional.of(venta));
+   when(saleRepository.markConfirmedIfPending(eq(1L), any())).thenReturn(0);
+
+   saleService.confirm(1L);
+
+   verify(saleRepository, never()).save(any(SaleEntity.class));
+   }
 
     /**
      * Idempotencia: el usuario Confirmar dos veces porque el primero no le llegó

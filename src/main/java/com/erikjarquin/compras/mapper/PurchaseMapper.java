@@ -51,6 +51,7 @@ public class PurchaseMapper {
         PurchaseItemDTO item = new PurchaseItemDTO();
         item.setQuantity(detail.getQuantity());
         item.setUnitCost(detail.getUnitCost());
+        item.setUnitPrice(detail.getUnitPrice()); //V3: precio de venta del renglón
         item.setSubtotal(detail.getSubtotal());
 
         if(detail.getProduct() != null){

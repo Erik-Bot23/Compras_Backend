@@ -95,6 +95,12 @@ public class PurchaseImpl implements PurchaseService {
             detail.setProduct(product);
             detail.setQuantity(item.getQuantity());
             detail.setUnitCost(unitCost);
+
+            //V3: precio de VENTA del renglón. Se guarda AHORA (al registrar), no
+            //al confirmar, para que la compra pendiente ya muestre el precio que
+            //se aplicará. Sigue sin tocar product.price: eso pasa al confirmar.
+            detail.setUnitPrice(item.getUnitPrice());
+
             detail.setSubtotal(unitCost.multiply(BigDecimal.valueOf(item.getQuantity())).setScale(2, java.math.RoundingMode.HALF_UP));
 
             total = total.add(detail.getSubtotal());
@@ -217,13 +223,42 @@ public class PurchaseImpl implements PurchaseService {
     @Override
     @Transactional
     public PurchaseDTO confirm(Long id){
+        //Un solo timestamp para la BD y para la entidad en memoria: si se sacara
+        //en dos momentos distintos, el confirmedAt que se guardó y el que ve el
+        //usuario podrían diferir en milisegundos y no coincidir con el histórico.
+        java.time.LocalDateTime cuando = java.time.LocalDateTime.now();
+
+        // ===== PASO 1: ganar la carrera, de forma atómica (V3) =====
+        //
+        //Este UPDATE condicional es lo que garantiza que el stock se sume UNA sola
+        //vez. Devuelve 1 si esta peticion fue la que confirmo, o 0 si otra se
+        //adelantó. Es atómico: la condición (confirmed = false) y la escritura
+        //(confirmed = true) se evalúan juntas, así que dos peticiones simultáneas no
+        //pueden pasar las dos.
+        //
+        //Va ANTES de tocar stock y NO con un simple if(entity.isConfirmed()) porque
+        //ese if lee la fila y decide en Java: con dos peticiones simultaneas las
+        //dos leen false antes de que ninguna escriba, y las dos suman el stock.
+        int filasAfectadas = purchaseRepository.markConfirmedIfPending(id, cuando);
+
+        //Ya confirmada (o la confirmó otra petición): 200 idempotente y CERO
+        //escrituras. No se duplica el stock.
+        if(filasAfectadas == 0){
+            PurchaseEntity yaConfirmada = purchaseRepository.findDetailedById(id)
+                    .orElseThrow(() -> new PurchaseException("Compra no encontrada", HttpStatus.NOT_FOUND));
+            return PurchaseMapper.toDto(yaConfirmada);
+        }
+
+        //Esta petición ganó la carrera: ahora sí se aplica el inventario.
+        //
+        //Se refleja el UPDATE sobre la entidad en memoria para devolver un DTO
+        //correcto. Sin esto habría que volver a leer de la base, y esa segunda
+        //lectura es un gasto evitable: el repositorio ya-nos dijo que esta
+        //petición ganó, así que el estado final es conocido sin volver a preguntar.
         PurchaseEntity purchase = purchaseRepository.findDetailedById(id)
                 .orElseThrow(() -> new PurchaseException("Compra no encontrada", HttpStatus.NOT_FOUND));
-
-        //Ya confirmada: 200 idempotente y CERO escrituras (no se duplica stock).
-        if(purchase.isConfirmed()){
-            return PurchaseMapper.toDto(purchase);
-        }
+        purchase.setConfirmed(true);
+        purchase.setConfirmedAt(cuando);
 
         if(purchase.getDetails() != null){
             for(PurchaseDetailEntity detail : purchase.getDetails()){
@@ -235,31 +270,34 @@ public class PurchaseImpl implements PurchaseService {
                 //1) Entra la mercancía al almacén.
                 product.setStock(product.getStock() + detail.getQuantity());
 
-                // ⚠️ AQUÍ ESTÁ LA DUDA FRECUENTE: se actualiza `cost` y NO `price`.
-                // Son dos columnas distintas, y a propósito:
-                //
-                //   cost  = lo que le PAGAMOS al proveedor. Solo el módulo de
-                //           compras lo escribe, porque solo él sabe lo que se
-                //           pagó. Alimenta `GET /api/local/reports/margins`
-                //           (margen = price - cost) y, desde V3, la utilidad.
-                //   price = lo que le COBRAMOS al cliente. Es una decisión
-                //           comercial (margen, competencia, promociones) y NO
-                //           debe cambiar solo porque el proveedor cobró más caro.
-                //
-                // Si se actualizara `price` con el costo, cada compra borraría el
-                // margen que el dueño eligió y el producto se vendería a precio
-                // de costo. Recalcular el precio es una REGLA DE NEGOCIO
-                // (p.ej. "nuevo costo + X% de margen") y va en el CRUD de
-                // productos, no de paso aquí.
+                //2) ⚠️ COSTO: lo que se le PAGA al proveedor. Solo este módulo lo
+                //   escribe, porque solo él sabe lo que se pagó. Alimenta
+                //   `GET /api/local/reports/margins` (margen = price - cost) y,
+                //   desde V3, la utilidad de cada venta via sale_details.unitCost.
                 product.setCost(detail.getUnitCost());
+
+                //3) PRECIO DE VENTA (V3, decisión del dueño): CONFIRMAR también
+                //   actualiza product.price con lo que dice el renglón. Hasta V2
+                //   este módulo NUNCA escribía price, porque se consideraba
+                //   "decisión comercial"; el dueño aclaró el flujo real: al crear
+                //   el producto da su precio, y al reponer stock escribe el
+                //   precio de venta de ese lote (puede ser el mismo o subirse).
+                //
+                //   NULL = "esta compra no opina sobre el precio": se deja el que
+                //   ya tiene. Por eso el campo es nullable y opcional, y no un 0
+                //   (un 0 dejaría el producto gratis).
+                if(detail.getUnitPrice() != null){
+                    product.setPrice(detail.getUnitPrice());
+                }
+
                 productRepository.save(product);
             }
         }
 
-        purchase.setConfirmed(true);
-        purchase.setConfirmedAt(java.time.LocalDateTime.now());
-
-        return PurchaseMapper.toDto(purchaseRepository.save(purchase));
+        //El flag confirmed ya quedó escrito en la BD por el UPDATE condicional del
+        //paso 1 (y reflejado en la entidad arriba), así que no se vuelve a hacer
+        //save(purchase): sería una segunda escritura inútil de la cabecera.
+        return PurchaseMapper.toDto(purchase);
     }
 
     //Validar la petición: proveedor y items obligatorios, cantidades y costos válidos (400)

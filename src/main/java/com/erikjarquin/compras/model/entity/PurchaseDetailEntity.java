@@ -17,6 +17,17 @@ import jakarta.persistence.Table;
  * para que el histórico no cambie aunque después se vuelva a comprar más caro
  * o barato. subtotal = unitCost * quantity. El servicio usa ei unitCost de la
  * compra para actualizar product.cost (el costo real vigente del producto).
+ *
+ * <p><b>unitPrice (V3, 2026-09-30)</b> es el precio de VENTA que este renglón
+ * aplica al producto al confirmar la compra. Es una columna distinta de
+ * {@code unitCost}: una es lo que se le paga al proveedor y la otra es lo que se
+ * le cobra al cliente, y confundirlas es exactamente el error que esta tabla
+ * existe para evitar.
+ *
+ * <p>Es nullable a propósito, y el significado de {@code null} es concreto:
+ * "esta compra no opina sobre el precio de venta". Entonces confirmar deja el
+ * precio que ya tiene el producto. Si fuera NOT NULL no se podría distinguir
+ * "no lo llené" de "lo puse en 0", y un 0 dejaría el producto gratis.
  */
 @Entity
 @Table(name = "purchase_details")
@@ -36,6 +47,9 @@ public class PurchaseDetailEntity {
     private Integer quantity;
 
     private BigDecimal unitCost;
+
+    /**Precio de VENTA que se aplica al producto al confirmar (V3). NULL = no cambia. */
+    private BigDecimal unitPrice;
 
     private BigDecimal subtotal;
 
@@ -84,6 +98,15 @@ public class PurchaseDetailEntity {
 
     public void setUnitCost(BigDecimal unitCost){
         this.unitCost=unitCost;
+    }
+
+    //Getter y setter de unitPrice (precio de venta del renglón, V3)
+    public BigDecimal getUnitPrice(){
+        return unitPrice;
+    }
+
+    public void setUnitPrice(BigDecimal unitPrice){
+        this.unitPrice=unitPrice;
     }
 
     //Getter y setter de subtotal

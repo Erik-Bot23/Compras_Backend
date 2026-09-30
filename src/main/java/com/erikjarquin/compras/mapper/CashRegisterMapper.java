@@ -21,6 +21,7 @@ public class CashRegisterMapper {
 
         response.setId(cash.getId());
         response.setNumber(cash.getNumber());
+        response.setDifferenceReason(cash.getDifferenceReason());
         response.setOpenedAt(cash.getOpenedAt());
         response.setClosedAt(cash.getClosedAt());
         response.setOpeningAmount(cash.getOpeningAmount());

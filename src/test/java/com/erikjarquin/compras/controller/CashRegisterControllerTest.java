@@ -1,6 +1,7 @@
 package com.erikjarquin.compras.controller;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -234,5 +235,145 @@ class CashRegisterControllerTest {
         mockMvc.perform(get("/api/local/cash/number/CAJA-99"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("CASH_ERROR"));
+    }
+
+    // =========================================================================
+    //  V3: crear la caja, elegirla y el cuadre del cierre
+    // =========================================================================
+
+    /**
+     * Crear caja es un endpoint NUEVO y separado de abrir (V3): la caja se registra
+     * con su número y después se abre eligiéndola.
+     */
+    @Test
+    @WithMockUser(authorities = "ABRIR_CAJA")
+    void crearCaja_devuelve200ConElNumero() throws Exception {
+        when(cashService.create(any())).thenReturn(cajaConNumero("CAJA 1"));
+
+        mockMvc.perform(post("/api/local/cash")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"number\":\"CAJA 1\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.number").value("CAJA 1"))
+                .andExpect(jsonPath("$.active").value(false));
+    }
+
+    @Test
+    @WithMockUser(authorities = "ABRIR_CAJA")
+    void crearCaja_numeroRepetido_devuelve409() throws Exception {
+        when(cashService.create(any())).thenThrow(new CashException(
+                "Ya existe una caja con el numero \"CAJA 1\"", HttpStatus.CONFLICT));
+
+        mockMvc.perform(post("/api/local/cash")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"number\":\"CAJA 1\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CASH_ERROR"));
+    }
+
+    /** Las cajas sin abrir son el insumo directo del selector de "abrir caja". */
+    @Test
+    @WithMockUser(authorities = "ABRIR_CAJA")
+    void cajasDisponibles_devuelveLista() throws Exception {
+        when(cashService.getAvailable()).thenReturn(List.of(cajaConNumero("CAJA 1"), cajaConNumero("CAJA 2")));
+
+        mockMvc.perform(get("/api/local/cash/available"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].number").value("CAJA 1"));
+    }
+
+    /**
+     * El siguiente número viene en un objeto y no como texto pelado: TypeScript
+     * espera una propiedad con nombre.
+     */
+    @Test
+    @WithMockUser(authorities = "ABRIR_CAJA")
+    void siguienteNumero_devuelveLaSugerencia() throws Exception {
+        when(cashService.getNextSuggestedNumber()).thenReturn("CAJA 3");
+
+        mockMvc.perform(get("/api/local/cash/next-number"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.suggestedNumber").value("CAJA 3"));
+    }
+
+    /** Abrir ahora manda el número de una caja EXISTENTE, no crea una nueva. */
+    @Test
+    @WithMockUser(authorities = "ABRIR_CAJA")
+    void abrirCaja_devuelve200() throws Exception {
+        when(cashService.open(any())).thenReturn(cajaConNumero("CAJA 1"));
+
+        mockMvc.perform(post("/api/local/cash/open")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"openingAmount\":500,\"number\":\"CAJA 1\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.number").value("CAJA 1"));
+    }
+
+    @Test
+    @WithMockUser(authorities = "ABRIR_CAJA")
+    void abrirCaja_fondoMenorACien_devuelve400() throws Exception {
+        when(cashService.open(any())).thenThrow(new CashException(
+                "El monto inicial debe ser al menos $100", HttpStatus.BAD_REQUEST));
+
+        mockMvc.perform(post("/api/local/cash/open")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"openingAmount\":50,\"number\":\"CAJA 1\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("CASH_ERROR"));
+    }
+
+    /**
+     * El punto 5.1 del encargo: si el dinero no cuadra y no hay motivo, el cierre
+     * se rechaza con 409 y la caja sigue abierta.
+     */
+    @Test
+    @WithMockUser(authorities = "CERRAR_CAJA")
+    void cerrarCaja_sinCuadrarYSinMotivo_devuelve409() throws Exception {
+        when(cashService.close(any())).thenThrow(new CashException(
+                "El dinero no cuadra. Esperado: $700, contado: $650, diferencia: -50",
+                HttpStatus.CONFLICT));
+
+        mockMvc.perform(post("/api/local/cash/close")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"closingAmount\":650}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("no cuadra")));
+    }
+
+    /** Salida de emergencia: con motivo, el cierre proceeds. */
+    @Test
+    @WithMockUser(authorities = "CERRAR_CAJA")
+    void cerrarCaja_conMotivo_cierra() throws Exception {
+        CashResponse cerrada = cajaConNumero("CAJA 1");
+        cerrada.setDifference(new BigDecimal("-50"));
+        cerrada.setDifferenceReason("Se me paso un billete de 50");
+        when(cashService.close(any())).thenReturn(cerrada);
+
+        mockMvc.perform(post("/api/local/cash/close")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"closingAmount\":650,\"differenceReason\":\"Se me paso un billete de 50\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.differenceReason").value("Se me paso un billete de 50"));
+    }
+
+    @Test
+    @WithMockUser(authorities = "OTRO_PERMISO")
+    void crearCaja_sinPermiso_devuelve403() throws Exception {
+        mockMvc.perform(post("/api/local/cash")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"number\":\"CAJA 9\"}"))
+                .andExpect(status().isForbidden());
+
+        verify(cashService, never()).create(any());
+    }
+
+    //Helper: caja con número
+    private CashResponse cajaConNumero(String numero){
+        CashResponse r = new CashResponse();
+        r.setId(1L);
+        r.setNumber(numero);
+        r.setActive(false);
+        return r;
     }
 }

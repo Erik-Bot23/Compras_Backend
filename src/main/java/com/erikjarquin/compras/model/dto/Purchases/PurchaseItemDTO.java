@@ -12,6 +12,15 @@ public class PurchaseItemDTO {
     private String productName;
     private Integer quantity;
     private BigDecimal unitCost;
+
+    /**
+     * Precio de VENTA aplicado al producto al confirmar (V3). Se devuelve para
+     * que el frontend muestre "costo de compra" y "precio de venta" juntos en
+     * el renglón, que es donde el usuario compara si el margen sigue siendo
+     * sano. NULL = la compra no cambió el precio de venta.
+     */
+    private BigDecimal unitPrice;
+
     private BigDecimal subtotal;
 
     public PurchaseItemDTO(){}
@@ -27,6 +36,9 @@ public class PurchaseItemDTO {
 
     public BigDecimal getUnitCost(){ return unitCost; }
     public void setUnitCost(BigDecimal unitCost){ this.unitCost=unitCost; }
+
+    public BigDecimal getUnitPrice(){ return unitPrice; }
+    public void setUnitPrice(BigDecimal unitPrice){ this.unitPrice=unitPrice; }
 
     public BigDecimal getSubtotal(){ return subtotal; }
     public void setSubtotal(BigDecimal subtotal){ this.subtotal=subtotal; }

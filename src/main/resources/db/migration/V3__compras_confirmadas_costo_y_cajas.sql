@@ -146,7 +146,78 @@ ALTER TABLE public.cash_registers
     ADD CONSTRAINT cash_registers_number_key UNIQUE (number);
 
 COMMENT ON COLUMN public.cash_registers.number IS
-    'Numero que escribe el vendedor al abrir la caja. UNIQUE: identifica el corte en Reportes';
+    'Numero de la caja fisica. UNIQUE: identifica el corte en Reportes. Se asigna al CREAR la caja, no al abrirla';
+
+
+-- ----------------------------------------------------------------------------
+--  3b) Las cajas se CREAN antes de abrirse
+-- ----------------------------------------------------------------------------
+--  Cambio de modelo: antes la fila de cash_registers se creaba al ABRIR la caja
+--  y el numero se escribia en ese momento. Ahora la caja fisica se registra
+--  primero (CREATE) y despues se abre una de las existentes. Razon: el numero
+--  tiene que existir antes de abrir para poder elegirlo de una lista, igual que
+--  una caja real esta rotulada antes de usarse.
+--
+--  No hace falta alterar opened_at/opening_amount a NULL: en V1 ya son nullable
+--  (solo id y total_tickets son NOT NULL). Una caja todavia no abierta queda con:
+--      number = 'CAJA 1', opened_at = NULL, opening_amount = NULL, active = false
+--  y las columnas de totales en 0. Se distingue de una caja CERRADA porque esa
+--  tiene opened_at NOT NULL y closed_at NOT NULL.
+--
+--  CONSECUENCIA DE DISENO (importante): una caja se puede abrir UNA sola vez.
+--  El numero es UNIQUE, o sea una fila por caja fisica, y reabrir "CAJA 1"
+--  mezclaria dos turnos distintos en el mismo corte y el reporte por caja
+--  mostraria una venta de manana junto a una de la tarde como si fueran del
+--  mismo turno. Para un turno nuevo se crea "CAJA 2".
+
+-- ----------------------------------------------------------------------------
+--  3c) cash_registers.difference_reason: por que se cerro con descuadre
+-- ----------------------------------------------------------------------------
+--  El corte exige que el efectivo contado coincida con el esperado. Cuando no
+--  coincide, el cierre se BLOQUEA, pero se deja una salida de emergencia: el
+--  cajero puede cerrar escribiendo el motivo. Sin esta columna el descuadre
+--  pasaria sin rastro, y "me sobraron 200" y "me faltaron 200" son problemas
+--  opuestos con el mismo sintoma.
+
+ALTER TABLE public.cash_registers
+    ADD COLUMN IF NOT EXISTS difference_reason varchar(255);
+
+COMMENT ON COLUMN public.cash_registers.difference_reason IS
+    'Motivo del descuadre al cerrar. NULL = el corte cuadró exactamente. '
+    'Si hay valor, el cierre fue forzado con la salida de emergencia';
+
+
+-- ----------------------------------------------------------------------------
+--  3d) purchase_details.unit_price: el precio de VENTA del renglón
+-- ----------------------------------------------------------------------------
+--  Cambio de regla de negocio (decision del 2026-09-30, punto 3 del encargo):
+--  hasta V2 el modulo de compras NUNCA escribia product.price, porque el precio
+--  de venta seconsidered "decision comercial del dueño" y no debia cambiar solo
+--  porque el proveedor cobro mas caro. El dueño aclaro el flujo real:
+--
+--      al crear el producto por 1a vez da su precio de VENTA;
+--      al reponer stock compra al proveedor y escribe el precio de VENTA de ese
+--      lote, que puede seguir igual o subirse.
+--
+--  Entonces CONFIRMAR la compra actualiza DOS columnas del producto: el stock
+--  (como antes) y ahora tambien el precio de venta. Compras y productos siguen
+--  siendo tablas separadas: el precio queda historizado en el renglón, y el
+--  producto solo guarda el VIGENTE. Por eso el reporte de margenes (que compara
+--  products.cost contra products.price) refleja el ultimo precio confirmado.
+--
+--  NULLABLE A PROPOSITO: NULL significa "esta compra noopiniona sobre el precio
+--  de venta". Es lo que hace que el cambio sea compatible con las compras ya
+--  registradas y con los clientes que no llenen el campo: se deja el precio
+--  que ya tiene el producto. Con NOT NULL seria imposible distinguir "no
+-- opiniono" de "lo puse en 0".
+
+ALTER TABLE public.purchase_details
+    ADD COLUMN IF NOT EXISTS unit_price numeric(38,2);
+
+COMMENT ON COLUMN public.purchase_details.unit_price IS
+    'Precio de VENTA aplicado al producto al confirmar la compra. '
+    'NULL = esta compra no cambia el precio de venta del producto';
+
 
 -- ----------------------------------------------------------------------------
 --  4) permissions: CONFIRMAR_COMPRAS -> el enum pasa de 36 a 37

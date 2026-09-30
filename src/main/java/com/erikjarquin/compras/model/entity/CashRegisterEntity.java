@@ -35,6 +35,18 @@ public class CashRegisterEntity {
     //Numero que escribe el vendedor al abrir (UNIQUE). Null solo antes de V3.
     private String number;
 
+    /**
+     * Motivo del descuadre al cerrar (V3). NULL cuando el corte cuadró
+     * exactamente.
+     *
+     * <p>Existe porque el cierre <b>exige</b> que el efectivo contado coincida
+     * con el esperado, pero se deja una salida de emergencia: si el cajero está
+     * seguro del monto, escribe por qué no cuadra y el cierre proceeds. Sin esta
+     * columna el descuadre pasaría sin rastro, y "me sobraron 200" y "me faltaron
+     * 200" son problemas opuestos que un reporte sin motivo no puede distinguir.
+     */
+    private String differenceReason;
+
     private LocalDateTime openedAt;
 
     private LocalDateTime closedAt;
@@ -67,11 +79,20 @@ public class CashRegisterEntity {
         return number;
     }
 
-    public void setNumber(String number){
-        this.number=number;
-    }
+public void setNumber(String number){
+   this.number=number;
+   }
 
-    //Getter y setter de id
+   //Getter y setter de differenceReason (motivo del descuadre, V3)
+   public String getDifferenceReason(){
+   return differenceReason;
+   }
+
+   public void setDifferenceReason(String differenceReason){
+   this.differenceReason=differenceReason;
+   }
+   
+   //Getter y setter de id
     public Long getId(){
         return id;
     }

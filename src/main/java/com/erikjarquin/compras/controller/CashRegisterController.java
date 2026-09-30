@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.erikjarquin.compras.model.dto.Cash.CashResponse;
 import com.erikjarquin.compras.model.dto.Cash.CashSummaryResponse;
 import com.erikjarquin.compras.model.dto.Cash.CloseCashRequest;
+import com.erikjarquin.compras.model.dto.Cash.CreateCashRequest;
 import com.erikjarquin.compras.model.dto.Cash.OpenCashRequest;
 import com.erikjarquin.compras.service.CashRegisterService;
 
@@ -38,7 +39,43 @@ public class CashRegisterController {
         return service.getSummary();
     }
 
-    //Abrir caja
+    /**
+     * CREAR una caja física (V3). La caja queda registrada pero NO abierta: se
+     * abre después eligiéndola en {@code POST /open}.
+     *
+     * <p>Se separa de "abrir" porque el número tiene que existir antes para poder
+     * elegirse. Un 409 si el número ya existe: sin unicidad, dos cortes distintos
+     * se mezclarían al filtrar reportes por caja.
+     */
+    @PreAuthorize("hasAuthority('ABRIR_CAJA')")
+    @PostMapping
+    public CashResponse create(@RequestBody CreateCashRequest request){
+        return service.create(request);
+    }
+
+    /**
+     * Cajas todavía sin abrir: las que se pueden elegir para abrir.
+     *
+     * <p>Usa {@code ABRIR_CAJA} y no {@code VER_CAJA} porque es el insumo directo
+     * de "abrir caja": quien puede abrir necesita saber qué cajas hay.
+     */
+    @PreAuthorize("hasAuthority('ABRIR_CAJA')")
+    @GetMapping("/available")
+    public List<CashResponse> getAvailable(){
+        return service.getAvailable();
+    }
+
+    /**
+     * Sugiere el siguiente número libre ("CAJA n") para prellenar el modal de
+     * crear caja. Es solo una sugerencia: el usuario puede escribir otro.
+     */
+    @PreAuthorize("hasAuthority('ABRIR_CAJA')")
+    @GetMapping("/next-number")
+    public NextNumberResponse getNextNumber(){
+        return new NextNumberResponse(service.getNextSuggestedNumber());
+    }
+
+    //Abrir una caja ya registrada
     @PreAuthorize("hasAuthority('ABRIR_CAJA')")
     @PostMapping("/open")
     public CashResponse open(@RequestBody OpenCashRequest request){
@@ -77,5 +114,12 @@ public class CashRegisterController {
     public CashResponse getByNumber(@PathVariable String number){
         return service.getByNumber(number);
     }
+
+    /**
+     * Envoltorio de {@code GET /cash/next-number}: un endpoint que devuelve un
+     * String pelado es raro de consumir desde TypeScript, que espera un objeto
+     * con la propiedad nombrada.
+     */
+    public record NextNumberResponse(String suggestedNumber){}
 
 }
