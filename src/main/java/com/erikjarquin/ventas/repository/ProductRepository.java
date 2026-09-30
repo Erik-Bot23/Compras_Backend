@@ -72,4 +72,12 @@ public interface ProductRepository extends JpaRepository<ProductEntity, Long> {
 
     //¿Cuántos productos tiene una categoría? (para bloquear su borrado con 409)
     long countByCategory_Id(Long categoryId);
+
+    boolean existsBySku(String sku);
+
+    boolean existsBySkuAndIdNot(String sku, Long id);
+
+    boolean existsByBarcode(String barcode);
+
+    boolean existsByBarcodeAndIdNot(String barcode, Long id);
 }

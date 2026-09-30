@@ -3,6 +3,7 @@ package com.erikjarquin.ventas.exceptions;
 import java.time.LocalDateTime;
 import java.util.stream.Collectors;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -223,6 +224,24 @@ public class GlobalExceptionHandler {
      * Cualquier excepción no contemplada → 500 con mensaje genérico.
      * El detalle real se loguea en el servidor (no se filtra al cliente).
      */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDateIntegrityViolation(DataIntegrityViolationException ex){
+        String raw = String.valueOf(ex.getMostSpecificCause().getMessage()).toLowerCase();
+
+        log.warn("Dato duplicado en BD: {}", raw);
+
+        String message;
+        if(raw.contains("sku")){
+            message = "Ya existe un producto con ese SKU";
+        } else if(raw.contains("barcode")){
+            message = "Ya existe un producto con ese código de barras";
+        } else {
+            message = "No se pudo guardar: el dato ya existe";
+        }
+
+        return buildErrorResponse(HttpStatus.CONFLICT, "PRODUCT_ERROR", message);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGenericException(Exception e) {
         log.error("Error interno del servidor", e);

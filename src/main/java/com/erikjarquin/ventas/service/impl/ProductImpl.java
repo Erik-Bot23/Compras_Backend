@@ -92,8 +92,10 @@ public class ProductImpl implements ProductService {
                         new IllegalArgumentException("Categoria no encontrada"));
                                         
         entity.setCategory(category);
-        entity.setSku(sku);
-        entity.setBarcode(barcode);
+
+        validateDuplicates(null, sku, barcode);
+        entity.setSku(normalizeCode(sku));
+        entity.setBarcode(normalizeCode(barcode));
 
         entity.setImg(fileStorageService.store(image));
 
@@ -121,8 +123,10 @@ public class ProductImpl implements ProductService {
 
         CategoryEntity category = categoryRepository.findById(categoryId).orElseThrow(() -> new IllegalArgumentException("Categoría no encontrada"));
         entity.setCategory(category);
-        entity.setSku(sku);
-        entity.setBarcode(barcode);
+
+        validateDuplicates(id, sku, barcode);
+        entity.setSku(normalizeCode(sku));
+        entity.setBarcode(normalizeCode(barcode));
 
         if(image != null && !image.isEmpty()){
             fileStorageService.delete(entity.getImg());
@@ -215,4 +219,21 @@ public class ProductImpl implements ProductService {
         return ids;
     }
 
+    //==Nuevo métodos para controlar las excepciones de sku o barcode iguales en dos productos
+    private String normalizeCode(String value){
+        return (value == null || value.isBlank() ? null : value.trim());
+    }
+
+    private void validateDuplicates(Long id, String sku, String barcode){
+        String s = normalizeCode(sku);
+        String b = normalizeCode(barcode);
+
+        if(s != null && (id == null ? repository.existsBySku(s) : repository.existsBySkuAndIdNot(s, id))){
+            throw new ProductException("Ya existe un producto con el SKU '" + s + "'", HttpStatus.CONFLICT);
+        }
+
+        if(b != null && (id == null ? repository.existsByBarcode(b) : repository.existsByBarcodeAndIdNot(b, id))){
+            throw new ProductException("Ya existe un producto con el código de barras '" + b + "'", HttpStatus.CONFLICT);
+        }
+    }
 }
