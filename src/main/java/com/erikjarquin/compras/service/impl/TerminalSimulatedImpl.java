@@ -20,13 +20,13 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * Terminal de pagos SIMULADA (modo por defecto, ideal para desarrollo/demo).
  *
- * <p>Se activa con {@code payment.terminal.type=SIMULATED} (matchIfMissing=true).
+ * Se activa con {@code payment.terminal.type=SIMULATED} (matchIfMissing=true).
  * Dos modos de simulación ({@code payment.terminal.simulation.mode}):
  *  - DETERMINISTIC: usa tarjetas de prueba fijas de TestCardRepository
  *    (VISA ok, VISA sin saldo, bloqueada, PIN incorrecto, MC crédito).
  *  - RANDOM: aprueba el ~90% de las transacciones con errores aleatorios.
  *
- * <p>Nunca realiza cobros reales: es seguro para pruebas y demostraciones.
+ * Nunca realiza cobros reales: es seguro para pruebas y demostraciones.
  */
 @Slf4j
 @Service

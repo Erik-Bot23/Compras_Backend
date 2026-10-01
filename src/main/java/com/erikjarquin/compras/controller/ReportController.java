@@ -26,7 +26,7 @@ import com.erikjarquin.compras.service.ReportsService;
  * Reportes (dashboard analítico). Todos los endpoints exigen el permiso
  * VER_REPORTES (la exportación PDF/Excel se hace del lado del cliente).
  *
- * <p>Todas las consultas aceptan {@code from}/{@code to} (ISO yyyy-MM-dd,
+ * Todas las consultas aceptan {@code from}/{@code to} (ISO yyyy-MM-dd,
  * opcionales) y agregan en SQL.
  */
 @RestController
@@ -103,7 +103,7 @@ public class ReportController {
     /**
      * UTILIDAD del rango (V3): ingresos − costo de lo vendido.
      *
-     * <p>Es el reporte que hace falta para saber si el negocio está ganando
+     * Es el reporte que hace falta para saber si el negocio está ganando
      * dinero. No sirve restar el total de las compras del periodo: ese dinero no
      * se perdió, quedó en el almacén. Se resta el costo de lo que ya se
      * vendió, tomado del costo congelado en cada renglón de venta.
@@ -119,7 +119,7 @@ public class ReportController {
     /**
      * Detalle de UNA caja (V3): qué se vendió en esa caja y cuánto se ganó.
      *
-     * <p>Va por {@code cashId} y no por número porque el número es dato de
+     * Va por {@code cashId} y no por número porque el número es dato de
      * entrada del usuario y el id es la clave real; el frontend resuelve el
      * número → id con {@code GET /api/local/cash/history}. Una caja inexistente
      * devuelve <b>404</b> (no un 400), porque el recurso no existe.

@@ -13,7 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * Repositorio de tarjetas de PRUEBA (solo usado por TerminalSimulatedImpl).
  *
- * <p>⚠️ En memoria (NO persiste): vive en el MAP con tarjetas determinísticas
+ * En memoria (NO persiste): vive en el MAP con tarjetas determinísticas
  * para simular casos: saldo suficiente/insuficiente, bloqueada, PIN inválido
  * y crédito. En producción con TERMINAL_TYPE=PHYSICAL este repo no se usa.
  * NUNCA guardar datos reales de tarjetas aquí.

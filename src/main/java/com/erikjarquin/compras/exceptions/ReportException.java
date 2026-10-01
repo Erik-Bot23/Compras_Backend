@@ -5,12 +5,12 @@ import org.springframework.http.HttpStatus;
 /**
  * Excepción de negocio del módulo de reportes (V3, 2026-09-30).
  *
- * <p>Hasta V3 los reportes solo validaban rangos de fechas y lanzaban
+ * Hasta V3 los reportes solo validaban rangos de fechas y lanzaban
  * {@code IllegalArgumentException} (400 vía {@code GlobalExceptionHandler}).
  * El detalle por caja necesita un 404 real: pedir el reporte de una caja que no
  * existe no es "pedí algo mal formado", es "ese recurso no está".
  *
- * <p>Mismo patrón que {@link SaleException} / {@link PurchaseException}: el
+ * Mismo patrón que {@link SaleException} / {@link PurchaseException}: el
  * servicio lanza la excepción con el código desired y el handler solo la
  * traduce, para que el servicio no sepa de HTTP.
  */

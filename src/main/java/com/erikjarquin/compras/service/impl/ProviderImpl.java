@@ -18,7 +18,7 @@ import com.erikjarquin.compras.service.ProviderService;
 /**
  * Implementación del CRUD de proveedores.
  *
- * <p>Reglas de negocio: nombre y RFC son obligatorios (400); RFC único (409);
+ * Reglas de negocio: nombre y RFC son obligatorios (400); RFC único (409);
  * no se puede borrar un proveedor que tenga compras (409, integridad del
  * histórico). No encontrado → 404 vía ProviderException por defecto.
  */
@@ -113,12 +113,12 @@ entity.setName(normalizarNombre(dto.getName()));
     /**
      * Normaliza el nombre del proveedor: recorta y pasa a MAYÚSCULAS.
      *
-     * <p>El nombre del proveedor sí va en mayúsculas (a diferencia del nombre de
+     * El nombre del proveedor sí va en mayúsculas (a diferencia del nombre de
      * los productos): es un dato corto, casi siempre una razón social, y en
      * mayúsculas se ve uniforme en las tablas y evita que "Dairy Queen" y
      * "DAIRY QUEEN" se guarden como dos proveedores distintos.
      *
-     * <p>Recortar es lo importante: los espacios al final invisiblemente rompen
+     * Recortar es lo importante: los espacios al final invisiblemente rompen
      * el UNIQUE del RFC cuando se busca por duplicado.
      */
     private String normalizarNombre(String nombre){

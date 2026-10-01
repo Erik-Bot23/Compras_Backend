@@ -7,19 +7,19 @@ import java.util.regex.Pattern;
  * Validaciones de entrada compartidas por los módulos de productos, proveedores y
  * compras (V3, 2026-09-30).
  *
- * <p><b>Por qué una clase aparte y no repetir el código en cada servicio.</b> Las
+ * Por qué una clase aparte y no repetir el código en cada servicio. Las
  * reglas nacieron de errores reales de captura ("1.875" en un stock, letras en un
  * precio, "CAJA 1" y "caja 1" contadas como dos cajas). Si cada servicio tiene
  * su versión, un día uno acepta y el otro no, y el que acepta es el que rompe los
  * datos. Aquí hay una sola definición de "qué es un barcode válido".
  *
- * <p><b>Por qué se valida el TEXTO y no el número ya parseado.</b> Es la clave de
+ * Por qué se valida el TEXTO y no el número ya parseado. Es la clave de
  * este diseño. Al convertir a {@code BigDecimal}, {@code "000.2"} se vuelve
  * {@code 0.2} y {@code "1.875"} se vuelve {@code 1.875}: si validáramos después
  * de parsear, el cero a la izquierda ya se perdió y no se puede detectar. Por eso
  * las reglas mira primero la cadena, y solo después convierte.
  *
- * <p>Los errores se lanzan como {@link IllegalArgumentException}, que
+ * Los errores se lanzan como {@link IllegalArgumentException}, que
  * {@code GlobalExceptionHandler} traduce a <b>400</b>. Es el mismo patrón que ya
  * usaba {@code PurchaseImpl.validateRequest}, y se prefirió aBean Validation
  * porque los mensajes pueden explicar <i>por qué</i> ("el stock no admite
@@ -53,7 +53,7 @@ public final class InputValidator {
     /**
      * SKU: letras, dígitos y los separadores de uso común ({@code - _ . /}).
      *
-     * <p>Se permiten letras porque un SKU no es un número: "CHOC-500" es un SKU
+     * Se permiten letras porque un SKU no es un número: "CHOC-500" es un SKU
      * perfectamente válido. Por eso el SKU y el barcode tienen reglas distintas.
      */
     private static final Pattern SKU_PATTERN = Pattern.compile("^[A-Z0-9\\-_./]+$");
@@ -62,9 +62,9 @@ public final class InputValidator {
     private static final Pattern RFC_PATTERN = Pattern.compile("^[A-Z0-9]+$");
 
     /**
-     * Barcode: <b>solo dígitos</b>, y se guarda como texto.
+     * Barcode: solo dígitos, y se guarda como texto.
      *
-     * <p>Decisión importante: el código de barras es un <i>identificador</i>, no
+     * Decisión importante: el código de barras es un identificador, no
      * una cantidad. Si se tratara como número, {@code 0001234567895} se guardaría
      * como {@code 1234567895} y el lector dejaría de funcionar, porque los ceros
      * a la izquierda son parte del código. Por eso la columna es texto y aquí solo
@@ -79,12 +79,12 @@ public final class InputValidator {
     /**
      * Normaliza un código: recorta y pasa a MAYÚSCULAS.
      *
-     * <p>Las mayúsculas son solo para <b>campos de código</b> (SKU, RFC, barcode,
+     * Las mayúsculas son solo para <b>campos de código (SKU, RFC, barcode,
      * número de caja, nombre de proveedor y categoría). No se aplican a los
      * nombres de producto ni a las descripciones: "Tacos de chicharrón" en
      * mayúsculas se lee peor y la búsqueda ya es insensible a mayúsculas.
      *
-     * <p>Además de la estética, la mayúscula fija evita duplicados: "cafe" y
+     * Además de la estética, la mayúscula fija evita duplicados: "cafe" y
      * "CAFE" son el mismo producto escrito de dos formas, y sin normalizar el
      * UNIQUE del SKU dejaría pasar dos productos que en realidad son uno.
      */
@@ -127,7 +127,7 @@ public final class InputValidator {
     /**
      * Valida el RFC. Opcional, pero si viene debe tener solo letras y dígitos.
      *
-     * <p>Se normaliza a mayúsculas porque un RFC se escribe con letras mayúsculas
+     * Se normaliza a mayúsculas porque un RFC se escribe con letras mayúsculas
      * y compararlo en minúsculas crearía duplicados falsos.
      */
     public static String rfc(String valor){
@@ -154,7 +154,7 @@ public final class InputValidator {
     /**
      * Valida el código de barras. Opcional.
      *
-     * <p>Solo dígitos, máximo {@link #MAX_BARCODE_LENGTH}, y <b>texto</b>: es un
+     * Solo dígitos, máximo {@link #MAX_BARCODE_LENGTH}, y texto: es un
      * identificador, y por eso no se convierte a número (perdería los ceros a la
      * izquierda y rompería el lector).
      */
@@ -183,21 +183,21 @@ public final class InputValidator {
     // =========================================================================
 
     /**
-     * Valida un <b>entero</b> no negativo (stock, cantidad).
+     * Valida un entero no negativo (stock, cantidad).
      *
-     * <p>Tres reglas que vienen de errores de captura reales:
-     * <ul>
-     *   <li><b>Nada de decimales.</b> No existe 1.6 de jabón: se mide en piezas o
+     * Tres reglas que vienen de errores de captura reales:
+     * 
+     *   Nada de decimales. No existe 1.6 de jabón: se mide en piezas o
      *       en kilos, no en 1.6 unidades. El campo de stock es entero; para peso
-     *       hay que agregar el kilo como unidad, no inventar el decimal.</li>
-     *   <li><b>Nada de negativos.</b> Un stock negativo es una contradicción
+     *       hay que agregar el kilo como unidad, no inventar el decimal.
+     *   Nada de negativos. Un stock negativo es una contradicción
      *       (no se puede tener menos de cero cosas), y si aparece es un error de
-     *       captura o una venta que no se descontó.</li>
-     *   <li><b>Nada de notación científica.</b> {@code 1e5} es un atajo para
+     *       captura o una venta que no se descontó.
+     *   Nada de notación científica. {@code 1e5} es un atajo para
      *       escribir 100000: el {@code <input type="number">} del navegador lo
      *       acepta en muchos casos y convertiría un error de dedo en 100,000
-     *       unidades.</li>
-     * </ul>
+     *       unidades.
+     * 
      */
     public static Integer entero(String valor, String campo){
         String limpio = limpiar(valor);
@@ -241,14 +241,14 @@ public final class InputValidator {
     }
 
     /**
-     * Valida un <b>precio</b>: no negativo y con máximo 2 decimales.
+     * Valida un precio: no negativo y con máximo 2 decimales.
      *
-     * <p>El límite de 2 decimales no es un capricho: la columna es
+     * El límite de 2 decimales no es un capricho: la columna es
      * {@code numeric(38,2)} en PostgreSQL, así que "1.875" se guardaría
-     * redondeado a 1.88 <b>en silencio</b>. El usuario escribiría 1.875, el
+     * redondeado a 1.88 <b>en silencio. El usuario escribiría 1.875, el
      * sistema cobraría 1.88 y nadie vería el redondeo. Rechazarlo es más honesto.
      *
-     * <p>Y se rechazan los ceros a la izquierda ("000.2"), porque un usuario que
+     * Y se rechazan los ceros a la izquierda ("000.2"), porque un usuario que
      * escribe eso casi siempre se equivocó de dedo y el dato guardado no es el que
      * quiso escribir.
      */
@@ -313,7 +313,7 @@ public final class InputValidator {
      * Rechaza ceros a la izquierda: "000.2" y "007" no son números válidos de
      * captura, son errores de dedo.
      *
-     * <p>Excepción deliberada: un solo "0" sí se acepta, porque "0" es un valor
+     * Excepción deliberada: un solo "0" sí se acepta, porque "0" es un valor
      * legítimo (stock 0, precio 0) y no un cero de relleno.
      */
     private static void validarSinCerosIniciales(String entero, String campo){

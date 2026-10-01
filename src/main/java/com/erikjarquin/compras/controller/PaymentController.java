@@ -18,7 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * Pagos con tarjeta a través de la terminal (simulada o física).
  *
- * <p>Exposa: cobro (POST /card), consulta de estado (GET /status/{id}),
+ * Exposa: cobro (POST /card), consulta de estado (GET /status/{id}),
  * reintento de pago rechazado (POST /retry/{id}) y reversa de pago aprobado
  * (POST /reverse/{id}). Todos exigen el permiso PROCESAR_PAGOS.
  */

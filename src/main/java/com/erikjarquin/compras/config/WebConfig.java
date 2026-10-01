@@ -10,11 +10,11 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 /**
  * Configuración web de Spring MVC para servir archivos estáticos del backend.
  *
- * <p>Expone la carpeta {@code app.upload-dir} (default: ./uploads) bajo la ruta
+ * Expone la carpeta {@code app.upload-dir} (default: ./uploads) bajo la ruta
  * pública {@code /api/uploads/**}. Así las imágenes de productos guardadas con
  * FileStorageService se sirven como: {@code http://host/api/uploads/<archivo>}.
  *
- * <p>Nota de seguridad: esta ruta es PÚBLICA en SecurityConfig porque las
+ * Nota de seguridad: esta ruta es PÚBLICA en SecurityConfig porque las
  * imágenes las muestra el frontend en el navegador sin token. Por eso
  * FileStorageService valida tipo/contenido de lo que se sube.
  */

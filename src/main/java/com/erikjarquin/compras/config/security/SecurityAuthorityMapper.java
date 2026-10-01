@@ -13,12 +13,12 @@ import com.erikjarquin.compras.model.entity.UserEntity;
 /**
  * Convierte el rol y los permisos de un usuario en autoridades de Spring Security.
  *
- * <p>La lista resultante alimenta el {@code Authentication} que crea JwtFilter.
+ * La lista resultante alimenta el {@code Authentication} que crea JwtFilter.
  * Formato:
  *  - {@code ROLE_<NOMBRE_ROL>} (para hasRole("...")).
  *  - el nombre de cada permiso del rol (para hasAuthority("...")).
  *
- * <p>IMPORTANTE: las autoridades se recalculan en cada request desde la BD
+ * IMPORTANTE: las autoridades se recalculan en cada request desde la BD
  * (findByEmailWithRoleAndPermissions). Si se quita un permiso al rol, el cambio
  * aplica de inmediato, sin esperar la expiración del JWT.
  */

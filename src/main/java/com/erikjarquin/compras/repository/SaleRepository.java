@@ -19,13 +19,13 @@ import com.erikjarquin.compras.model.enums.PaymentStatus;
  * de reportes ({@code ReportsImpl}), todas acotadas por rango de fechas y
  * estado APPROVED para no contabilizar ventas canceladas/reversadas.
  *
- * <p><b>Todas las consultas filtran además {@code cancelled = false}</b> (V3,
+ * Todas las consultas filtran además {@code cancelled = false} (V3,
  * 2026-09-30). Hasta V2, anular una venta la BORRABA, así que nunca aparecía en
  * un reporte. V2 la dejó en la tabla con {@code cancelled = true} —a propósito,
  * porque es evidencia contable— y eso destapó este bug: {@code cancel()} no
  * cambia el {@code paymentStatus}, que sigue en APPROVED. Resultado: una venta
  * anulada seguía sumando ingresos, y con V3 también sumaría costo, inflando la
- * utilidad. Filtrar por APPROVED <b>no</b> excluye las anuladas; hacen falta las
+ * utilidad. Filtrar por APPROVED no excluye las anuladas; hacen falta las
  * dos condiciones, porque el estado del pago y el de la venta son ejes
  * ortogonales a propósito.
  */
@@ -125,13 +125,13 @@ public interface SaleRepository extends JpaRepository<SaleEntity, Long> {
     /**
      * UTILIDAD (V3): costo real de lo vendido en el rango.
      *
-     * <p>Suma {@code quantity * unitCost} de los renglones de las ventas válidas,
+     * Suma {@code quantity * unitCost} de los renglones de las ventas válidas,
      * usando el costo CONGELADO en el renglón y no {@code product.cost}. Razón:
      * {@code product.cost} es el costo del último purchase de hoy, así que
      * comprar algo más barato mañana reescribiría la utilidad de ayer. El
      * costo se congela al vender justamente para esto.
      *
-     * <p>Los renglones con {@code unitCost} NULL se cuentan como 0 (COALESCE) y
+     * Los renglones con {@code unitCost} NULL se cuentan como 0 (COALESCE) y
      * el segundo valor del SELECT cuenta cuántos hay, para que el reporte pueda
      * avisar "N renglones sin costo conocido" en vez de mentir con una utilidad
      * inflada. Los renglones anteriores a V3 se rellenaron con el costo actual
@@ -163,15 +163,15 @@ public interface SaleRepository extends JpaRepository<SaleEntity, Long> {
     List<SaleEntity> findValidSalesByCashId(@Param("cashId") Long cashId);
 
     /**
-     * Marca la venta como CONFIRMADA de forma <b>atómica y condicional</b> (V3).
+     * Marca la venta como CONFIRMADA de forma atómica y condicional (V3).
      *
-     * <p>Devuelve el número de filas afectadas: 1 si esta petición ganó la
+     * Devuelve el número de filas afectadas: 1 si esta petición ganó la
      * carrera, 0 si otra se adelantó. Mismo mecanismo que
      * {@code PurchaseRepository.markConfirmedIfPending}, y por el mismo motivo:
      * un {@code if (sale.isConfirmed())} lee la fila y decide en Java, así que
      * dos peticiones simultáneas leen {@code false} antes de que ninguna escriba.
      *
-     * <p>Aquí el daño de la carrera es menor que en las compras (no se duplica
+     * Aquí el daño de la carrera es menor que en las compras (no se duplica
      * stock, solo se duplica una marca de tiempo), pero se corrige igual: un
      * {@code confirmed_at} distinto del real sería evidencia contable falsa.
      */

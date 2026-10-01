@@ -15,12 +15,12 @@ import com.erikjarquin.compras.repository.UserRepository;
  * Bootstrap que crea el usuario ADMIN inicial, solo la primera vez
  * que arranca la aplicación (si el email no existe aún en la BD).
  *
- * <p>Seguridad: las credenciales NO están hardcodeadas. Se leen de las
+ * Seguridad: las credenciales NO están hardcodeadas. Se leen de las
  * variables {@code ADMIN_EMAIL} / {@code ADMIN_PASSWORD}, resueltas en:
  *  - entorno local: application-local.yaml (ignorado por git)
  *  - Railway      : variables de entorno del servicio.
  *
- * <p>Se respeta {@code app.seed-bootstraps}: en false el admin inicial
+ * Se respeta {@code app.seed-bootstraps}: en false el admin inicial
  * NO se crea automáticamente (lo debe dar de alta alguien con acceso).
  */
 @Component

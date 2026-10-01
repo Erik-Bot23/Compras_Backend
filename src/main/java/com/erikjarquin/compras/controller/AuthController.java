@@ -18,7 +18,7 @@ import com.erikjarquin.compras.service.AuthService;
 /**
  * Autenticación y gestión de contraseñas (login, recuperación y cambio).
  *
- * <p>Es el único grupo de endpoints marcados como PÚBLICOS en SecurityConfig
+ * Es el único grupo de endpoints marcados como PÚBLICOS en SecurityConfig
  * ({@code /api/local/auth/**} → permitAll), pues el login/recuperación ocurre antes de
  * tener un token.
  */

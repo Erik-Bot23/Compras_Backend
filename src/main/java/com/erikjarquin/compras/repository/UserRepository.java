@@ -11,7 +11,7 @@ import com.erikjarquin.compras.model.entity.UserEntity;
 /**
  * Repositorio de usuarios.
  *
- * <p>findByEmailWithRoleAndPermissions usa JOIN FETCH para cargar rol y
+ * findByEmailWithRoleAndPermissions usa JOIN FETCH para cargar rol y
  * permisos en UNA consulta (evita N+1 y errores de LazyInitialization en
  * el AuthenticationProvider, donde se construyen las autoridades).
  */

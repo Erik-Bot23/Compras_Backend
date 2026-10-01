@@ -21,9 +21,7 @@ import lombok.extern.slf4j.Slf4j;
  * Manejador GLOBAL de excepciones (@RestControllerAdvice).
  * Centraliza la conversión de cada error en una respuesta JSON uniforme:
  *
- * <pre>
  * { "timestamp": ..., "status": ..., "code": "...", "message": "..." }
- * </pre>
  *
  * Reglas aplicadas:
  *  - Los mensajes internos/reales NUNCA se filtran al cliente en errores 500
@@ -108,7 +106,7 @@ public class GlobalExceptionHandler {
     /**
      * Ventas: errores de negocio del módulo de ventas.
      *
-     * <p>Se usa {@code ex.getStatus()} en vez de un 400 fijo: SaleException es
+     * Se usa {@code ex.getStatus()} en vez de un 400 fijo: SaleException es
      * 400 por defecto (stock insuficiente, caja cerrada, método de pago
      * inválido) pero el ciclo de vida de la venta necesita 409 CONFLICT
      * (anular una venta confirmada, anular dos veces, anular con tarjeta) y
@@ -163,7 +161,7 @@ public class GlobalExceptionHandler {
     // ------------------- Seguridad (401 / 403) -------------------
 
     /**
-     * Usuario autenticado sin el permiso requerido → 403 FORBIDDEN.
+     * Usuario autenticado sin el permiso requerido a 403 FORBIDDEN.
      * Se dispara cuando un @PreAuthorize no se cumple (o AccessDeniedException
      * llega hasta aquí). Confirma que el JSON de error es uniforme para el front.
      */
@@ -174,7 +172,7 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Request sin autenticación válida → 401 UNAUTHORIZED.
+     * Request sin autenticación válida a 401 UNAUTHORIZED.
      * (BadCredentialsException, AuthenticationCredentialsNotFoundException, etc.)
      */
     @ExceptionHandler(AuthenticationException.class)
@@ -185,7 +183,7 @@ public class GlobalExceptionHandler {
     // ------------------- Errores de validación y de request -------------------
 
     /**
-     * Falla la validación de un DTO con anotaciones tipo @NotBlank/@Size/@Min → 400.
+     * Falla la validación de un DTO con anotaciones tipo @NotBlank/@Size/@Min a 400.
      * Devuelve la lista de campos con su mensaje para que el frontend pueda
      * mostrarlos por campo. Antes caía al 500 genérico.
      */
@@ -200,7 +198,7 @@ public class GlobalExceptionHandler {
 
     /**
      * Parámetro de path/query con tipo incorrecto, p. ej. /api/local/sales/{id} no
-     * numérico → 400.
+     * numérico a 400.
      */
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
@@ -209,7 +207,7 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * JSON mal formado o sin el body esperado → 400 (no un 500 interno).
+     * JSON mal formado o sin el body esperado a 400 (no un 500 interno).
      */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponse> handleUnreadable(HttpMessageNotReadableException ex) {
@@ -218,7 +216,7 @@ public class GlobalExceptionHandler {
 
     /**
      * Recurso estático inexistente (p. ej. una imagen de producto cuyo archivo
-     * ya no está en uploads/) → 404, NO 500. Evita que el frontend reciba un
+     * ya no está en uploads/) a 404, NO 500. Evita que el frontend reciba un
      * "Error interno" cuando el navegador pide una imagen huérfana.
      */
     @ExceptionHandler(NoResourceFoundException.class)
@@ -228,7 +226,7 @@ public class GlobalExceptionHandler {
 
     /**
      * Entrada del usuario inválida que no es de negocio (p. ej. archivo de imagen
-     * con formato no permitido, lanzada por FileStorageService) → 400.
+     * con formato no permitido, lanzada por FileStorageService) a 400.
      */
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException ex) {
@@ -239,7 +237,7 @@ public class GlobalExceptionHandler {
     // ------------------- Error genérico -------------------
 
     /**
-     * Cualquier excepción no contemplada → 500 con mensaje genérico.
+     * Cualquier excepción no contemplada a 500 con mensaje genérico.
      * El detalle real se loguea en el servidor (no se filtra al cliente).
      */
     @ExceptionHandler(DataIntegrityViolationException.class)

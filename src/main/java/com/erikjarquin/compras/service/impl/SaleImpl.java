@@ -36,7 +36,7 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * Implementación del flujo COMPLETO de una venta.
  *
- * <p>Pasos (todo dentro de una transacción con rollback):
+ * Pasos (todo dentro de una transacción con rollback):
  *  1. Valida la solicitud y que exista una caja abierta.
  *  2. Crea la venta como PENDING (para obtener ID).
  *  3. Calcula el total en memoria validando productos y stock.
@@ -44,7 +44,7 @@ import lombok.extern.slf4j.Slf4j;
  *     PaymentService / terminal).
  *  5. Solo si el pago fue exitoso: aprueba la venta y DESCUENTA stock.
  *
- * <p>Si el pago con tarjeta falla, la excepción hace rollback total de la
+ * Si el pago con tarjeta falla, la excepción hace rollback total de la
  * transacción (la venta PENDING y el pago no quedan persistidos).
  */
 @Slf4j
@@ -350,7 +350,7 @@ public class SaleImpl implements SaleService {
      * cancel() empiezan exactamente igual: centralizar la búsqueda evita que
      * uno de los dos se olvide del orElseThrow.
      *
-     * <p>404 y no 400: el recurso no existe, no hay nada que "corregir" en el
+     * 404 y no 400: el recurso no existe, no hay nada que "corregir" en el
      * pedido. Un cliente que llama un id inexistente merece un 404 aunque antes
      * este método devolviera 400.
      */
@@ -363,12 +363,12 @@ public class SaleImpl implements SaleService {
     /**
      * CONFIRMAR la venta: la congela definitivamente.
      *
-     * <p>Se ejecuta cuando el pedido ya salió del mostrador. Desde este punto el
+     * Se ejecuta cuando el pedido ya salió del mostrador. Desde este punto el
      * stock descontado y el dinero cobrado son hechos reales, así que la venta
      * ya no se puede anular ni borrar. Es lo que hace imposible, en cascada, que
      * alguien intente "deshacer" una COMPRA cuyo stock ya se vendió.
      *
-     * <p><b>Idempotente por diseño</b>: si ya estaba confirmada devuelve OK sin
+     * Idempotente por diseño: si ya estaba confirmada devuelve OK sin
      * volver a pisar la fecha. La UI puede sufrir doble clic y el usuario puede
      * reintentar tras un corte de red; un 409 ahí sería confuso ("¿ya la
      * confirmé o no?"). Confirmar dos veces no es un error, es el mismo estado
@@ -411,28 +411,27 @@ public SaleHistoryResponse confirm(Long saleId){
     /**
      * ANULAR la venta y devolver el stock al inventario.
      *
-     * <p>Es la operación inversa de {@link #processSale}: por cada renglón suma
+     * Es la operación inversa de {@link #processSale}: por cada renglón suma
      * de vuelta la cantidad vendida. NO borra la fila, la deja con
      * {@code cancelled=true}: el historial de un POS es evidencia contable y un
      * contador que baja solo es un agujero de fraude. Para el negocio la venta
      * "no contó", y para la base de datos quedó registrado que pasó.
      *
-     * <p><b>Reglas, y el porqué de cada una:</b>
-     * <ul>
-     *   <li>No se anula una venta CONFIRMADA -> 409. Es el congelamiento: el
-     *       cliente ya se llevó la comida.</li>
-     *   <li>No se anula dos veces -> 409. Si pasara, el stock volvería a subir
-     *       dos veces y el inventario quedaría inflado.</li>
-     *   <li>No se anula una venta con TARJETA -> 409. El dinero ya entró a la
+     * Reglas, y el porqué de cada una:
+     * 
+     *   No se anula una venta CONFIRMADA -> 409. Es el congelamiento: el
+     *       cliente ya se llevó la comida.
+     *   No se anula dos veces -> 409. Si pasara, el stock volvería a subir
+     *       dos veces y el inventario quedaría inflado.
+     *   No se anula una venta con TARJETA -> 409. El dinero ya entró a la
      *       cuenta; "anular la venta" aquí no devolvería nada, solo mentiría el
      *       historial. Para ese caso existe el flujo de reversa real
      *       ({@code POST /api/local/payments/reverse/{id}}), que además exige su
      *       propia autorización. Una venta en EFECTIVO sí se puede anular,
      *       porque el efectivo se devuelve en mano y el estado de la venta es
-     *       la única fuente de verdad.</li>
-     * </ul>
+     *       la única fuente de verdad.
      *
-     * <p>Ojo con la devolución: se recorre {@code sale.getDetails()} (los
+     * Ojo con la devolución: se recorre {@code sale.getDetails()} (los
      * renglones ya guardados) y NO los items del request, porque en una
      * anulación no hay request: hay que deshacer exactamente lo que se hizo.
      * La cantidad a devolver es la del HISTÓRICO, no la que el cliente mande.

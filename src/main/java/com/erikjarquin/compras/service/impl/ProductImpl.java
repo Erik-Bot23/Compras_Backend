@@ -23,11 +23,11 @@ import com.erikjarquin.compras.service.ProductService;
 /**
  * Implementación del catálogo de productos.
  *
- * <p>La imagen se guarda con FileStorageService (que valida tamaño/extensión/
+ * La imagen se guarda con FileStorageService (que valida tamaño/extensión/
  * contenido y devuelve el nombre UUID). El mapper construye la URL completa:
  * {@code app.upload-url}/{archivo} para que el frontend la use en <img>.
  *
- * <p>Los errores de "no encontrado" o categoría inválida se lanzan como
+ * Los errores de "no encontrado" o categoría inválida se lanzan como
  * IllegalArgumentException → el GlobalExceptionHandler responde 400 (no 500).
  */
 @Service

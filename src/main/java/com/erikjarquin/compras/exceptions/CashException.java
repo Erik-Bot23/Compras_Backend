@@ -5,7 +5,7 @@ import org.springframework.http.HttpStatus;
 /**
  * Excepción de negocio del módulo de CAJA (apertura, cierre, resumen, caja activa).
  *
- * <p>Por defecto (constructor de un argumento) se mapea a 404 NOT_FOUND para
+ * Por defecto (constructor de un argumento) se mapea a 404 NOT_FOUND para
  * mantener el comportamiento previo, pero se puede indicar un HttpStatus
  * específico con el segundo constructor si el servicio lo requiere
  * (p. ej. 409 para "ya existe una caja abierta").

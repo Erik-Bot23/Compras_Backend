@@ -5,7 +5,7 @@ import org.springframework.http.HttpStatus;
 /**
  * Excepción de negocio del módulo de ROLES.
  *
- * <p>Por defecto se mapea a 404 NOT_FOUND (mantiene el comportamiento previo).
+ * Por defecto se mapea a 404 NOT_FOUND (mantiene el comportamiento previo).
  * Se puede indicar otro HttpStatus con el segundo constructor, p. ej. 409 para
  * "rol con usuarios asignados" o "ya existe un rol con ese nombre".
  */

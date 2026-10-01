@@ -26,17 +26,17 @@ import com.erikjarquin.compras.repository.RoleRepository;
  *  - ALMACENISTA→ ver/crear/editar productos + ver/crear compras y ver
  *                 proveedores (gestiona reposición de inventario).
  *
- * <p><b>Regla (SEED INICIAL, no self-healing):</b> solo asigna permisos si los
+ * Regla (SEED INICIAL, no self-healing): solo asigna permisos si los
  * roles base todavía NO tienen NINGÚN permiso (p. ej. BD recién creada o
  * arranque inicial). Si ya hay al menos un permiso asignado a cualquier rol
  * base, NO se toca nada: respeta la gestión manual (quitar permisos a CAJERO,
  * crear roles personalizados, etc.). Antes este bootstrap REASIGNABA en cada
  * arranque, lo que "resucitaba" roles/permisos borrados a mano.
  *
- * <p>Roles borrados a mano (p. ej. CAJERO) NO se recrean: se omiten y se
+ * Roles borrados a mano (p. ej. CAJERO) NO se recrean: se omiten y se
  * asignan permisos a los que sí existen.
  *
- * <p>Se respeta {@code app.seed-bootstraps}: en false este bootstrap no hace nada.
+ * Se respeta {@code app.seed-bootstraps}: en false este bootstrap no hace nada.
  */
 @Component
 @Order(4)

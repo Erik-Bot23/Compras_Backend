@@ -12,10 +12,10 @@ import com.erikjarquin.compras.model.enums.PaymentStatus;
 /**
  * Repositorio de pagos.
  *
- * <p>- findByTransactionId: soporta la idempotencia (no duplicar un pago que
- *   ya fue emitido con el mismo transactionId).
- * - findByStatusAndStatusQueriedFalse: pagos PENDING que aún no se consultaron.
- * - findByStatusAndPaymentDateBefore: pagos PENDING y vetustos (> X minutos) →
+ * findByTransactionId: soporta la idempotencia (no duplicar un pago que
+ * ya fue emitido con el mismo transactionId).
+ * findByStatusAndStatusQueriedFalse: pagos PENDING que aún no se consultaron.
+ * findByStatusAndPaymentDateBefore: pagos PENDING y vetustos (> X minutos) a
  *   los detecta PaymentMonitorJob para marcarlos REJECTED.
  */
 public interface PaymentRepository extends JpaRepository<PaymentEntity, Long> {

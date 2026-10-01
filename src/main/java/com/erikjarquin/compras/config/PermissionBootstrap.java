@@ -14,7 +14,7 @@ import com.erikjarquin.compras.repository.PermissionRepository;
  * {@link PermissionName} (los permisos del sistema) si aún no existen.
  * Al agregar un valor nuevo al enum se crea solo en el siguiente arranque.
  *
- * <p>Se respeta {@code app.seed-bootstraps}: en false este bootstrap no hace nada.
+ * Se respeta {@code app.seed-bootstraps}: en false este bootstrap no hace nada.
  */
 @Component
 @Order(3)

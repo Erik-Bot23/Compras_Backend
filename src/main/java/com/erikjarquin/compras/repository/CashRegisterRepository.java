@@ -10,18 +10,17 @@ import com.erikjarquin.compras.model.entity.CashRegisterEntity;
 /**
  * Repositorio de cajas.
  *
- * <p>{@code findByActiveTrue} devuelve la caja vigente; la existencia de UNA caja
+ * {@code findByActiveTrue} devuelve la caja vigente; la existencia de UNA caja
  * abierta es la invariante del módulo (la regla la aplica {@code CashRegisterImpl},
  * no la base de datos).
  *
- * <p>Desde V3 la caja se CREA antes de abrirse, así que conviven tres estados que
+ * Desde V3 la caja se CREA antes de abrirse, así que conviven tres estados que
  * se distinguen por columnas y no por el enum de la fila:
- * <ul>
- *   <li><b>Creada sin abrir</b>: {@code openedAt == null}, {@code active == false}.</li>
- *   <li><b>Abierta</b>: {@code openedAt != null}, {@code closedAt == null},
- *       {@code active == true}.</li>
- *   <li><b>Cerrada</b>: {@code closedAt != null}, {@code active == false}.</li>
- * </ul>
+ * 
+ *   Creada sin abrir: {@code openedAt == null}, {@code active == false}.
+ *   Abierta: {@code openedAt != null}, {@code closedAt == null},
+ *       {@code active == true}.
+ *   Cerrada: {@code closedAt != null}, {@code active == false}.
  */
 public interface CashRegisterRepository extends JpaRepository<CashRegisterEntity, Long> {
 
@@ -48,7 +47,7 @@ public interface CashRegisterRepository extends JpaRepository<CashRegisterEntity
     /**
      * Cajas NUNCA abiertas (V3): las candidatas para abrir.
      *
-     * <p>El criterio es {@code opened_at IS NULL}, no {@code active = false}. Una
+     * El criterio es {@code opened_at IS NULL}, no {@code active = false}. Una
      * caja recién creada no tiene {@code openedAt} y una caja ya cerrada lo tiene:
      * así se distingue "todavía no se usó" de "ya teve su turno", que es
      * justamente lo que impide reabrir la misma caja dos veces y mezclar dos

@@ -5,7 +5,7 @@ import org.springframework.http.HttpStatus;
 /**
  * Excepción de negocio del módulo de COMPRAS (POST/GET/DELETE /api/local/purchases).
  *
- * <p>Por defecto 404 NOT_FOUND (compra no encontrada). Con el segundo
+ * Por defecto 404 NOT_FOUND (compra no encontrada). Con el segundo
  * constructor se usan 400 (items vacíos/cantidad o costo inválidos) y 409
  * (proveedor inexistente, inconsistencia al cancelar).
  */

@@ -27,7 +27,7 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * Implementación del módulo de PAGOS con tarjeta.
  *
- * <p>Flujo: valida la venta → construye la solicitud para la terminal
+ * Flujo: valida la venta → construye la solicitud para la terminal
  * (SIMULADA o física) → si la terminal aprueba, guarda el PaymentEntity
  * APPROVED y marca la venta como paga. Incluye:
  *  - Idempotencia por venta (una venta no se paga dos veces).

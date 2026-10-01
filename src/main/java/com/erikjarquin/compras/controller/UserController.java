@@ -21,7 +21,7 @@ import com.erikjarquin.compras.service.UserService;
 /**
  * CRUD de usuarios del sistema.
  *
- * <p>Cada acción exige un PERMISO específico vía @PreAuthorize:
+ * Cada acción exige un PERMISO específico vía @PreAuthorize:
  * VER_USUARIOS, CREAR_USUARIOS, EDITAR_USUARIOS, DESACTIVAR_USUARIOS,
  * ACTIVAR_USUARIOS. Sin el token de un usuario con ese permiso → 403.
  */

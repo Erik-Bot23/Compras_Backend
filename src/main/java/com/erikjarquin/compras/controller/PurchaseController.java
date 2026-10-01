@@ -68,11 +68,11 @@ public class PurchaseController {
      * CONFIRMAR una compra: la mercancía entró al almacén, así que ahora sí
      * suma el stock de sus productos y guarda el costo real de cada uno.
      *
-     * <p>Se usa <b>PATCH</b> y no PUT porque es un cambio <b>parcial</b> de
+     * Se usa PATCH y no PUT porque es un cambio <b>parcial de
      * estado: un PUT reenviaría la compra entera y podría pisar el total o los
      * renglones. Mismo criterio que {@code PATCH /api/local/sales/{id}/confirm}.
      *
-     * <p>Es idempotente: si ya estaba confirmada devuelve 200 sin volver a
+     * Es idempotente: si ya estaba confirmada devuelve 200 sin volver a
      * sumar el stock (doble clic o reintento tras corte de red).
      */
     @PreAuthorize("hasAuthority('CONFIRMAR_COMPRAS')")

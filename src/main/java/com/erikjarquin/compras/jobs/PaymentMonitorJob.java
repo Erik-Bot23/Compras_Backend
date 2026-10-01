@@ -18,12 +18,12 @@ import lombok.extern.slf4j.Slf4j;
  * Tarea programada que vigila los pagos con tarjeta que quedaron en estado
  * PENDING durante mucho tiempo.
  *
- * <p>¿Por qué existe? Si la terminal aprueba el cobro pero el cliente pierde
+ * ¿Por qué existe? Si la terminal aprueba el cobro pero el cliente pierde
  * la conexión antes de recibir la respuesta, el pago queda PENDING en la BD.
  * Este job consulta la terminal cada 5 minutos (habilitado con @EnableScheduling
  * en ComprasApplication) para resolver ese pagos y actualizarlos a APPROVED/REJECTED.
  *
- * <p>Ubicado en el paquete {@code jobs} (no en DTOs): es una tarea de
+ * Ubicado en el paquete {@code jobs} (no en DTOs): es una tarea de
  * infraestructura, no un objeto de transferencia de datos.
  */
 @Slf4j

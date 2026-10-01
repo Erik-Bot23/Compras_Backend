@@ -8,7 +8,7 @@ import org.springframework.stereotype.Service;
 /**
  * Envío de correos electrónicos (Gmail SMTP) para la recuperación de contraseña.
  *
- * <p>Las credenciales SMTP (MAIL_USERNAME / MAIL_PASSWORD) vienen del
+ * Las credenciales SMTP (MAIL_USERNAME / MAIL_PASSWORD) vienen del
  * application.yaml resuelto por variables de entorno; el remitente se toma de
  * la misma cuenta configurada para evitar dejar correos hardcodeados en el código.
  */

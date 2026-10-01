@@ -8,18 +8,16 @@ import lombok.Data;
 /**
  * Configuración de la terminal de pagos (datos de conexión y credenciales).
  *
- * <p>Se alimenta del bloque {@code payment.terminal.*} de application.yaml,
+ * Se alimenta del bloque {@code payment.terminal.*} de application.yaml,
  * que a su vez se resuelve desde variables de entorno:
  *
- * <pre>
  *   PAYMENT_TERMINAL_TYPE   → SIMULATED | PHYSICAL
  *   TERMINAL_HOST / PORT    → IP y puerto de la terminal
  *   PAYMENT_MERCHANT_ID     → ID del comercio
  *   PAYMENT_TERMINAL_ID     → ID de la terminal
  *   PAYMENT_KEYSTORE_PASSWORD → contraseña del keystore (certificados SSL)
- * </pre>
  *
- * <p>SEGURIDAD: las credenciales nunca deben quedar hardcodeadas aquí ni en
+ * SEGURIDAD: las credenciales nunca deben quedar hardcodeadas aquí ni en
  * application.yaml; viajan en variables de entorno (Railway) o en
  * application-local.yaml (dev, ignorado por git).
  */

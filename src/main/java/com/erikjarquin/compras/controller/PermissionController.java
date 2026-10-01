@@ -12,7 +12,7 @@ import com.erikjarquin.compras.service.PermissionService;
 
 /**
  * Permisos del sistema (lectura). Lista todos los permisos disponibles,
- * usados por el frontend para armar la asignación rol ↔ permiso.
+ * usados por el frontend para armar la asignación rol a permiso.
  * Requiere VER_ROLES (permiso compartido con el módulo de roles).
  */
 @RestController

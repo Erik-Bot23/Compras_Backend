@@ -25,27 +25,27 @@ import com.erikjarquin.compras.service.PurchaseService;
 /**
  * Implementación del módulo de compras.
  *
- * <p><b>Registrar ({@code create})</b>: valida proveedor e items (400/409), arma
- * cabecera + detalles con subtotales y calcula el total. <b>NO toca el
- * inventario</b>: la compra nace PENDIENTE. Desde V3 el efecto en el almacén
+ * Registrar ({@code create}): valida proveedor e items (400/409), arma
+ * cabecera + detalles con subtotales y calcula el total. NO toca el
+ * inventario: la compra nace PENDIENTE. Desde V3 el efecto en el almacén
  * vive en {@link #confirm(Long)}, no aquí.
  *
- * <p><b>Confirmar ({@code confirm})</b>: es la operación que SUMA el stock de
+ * Confirmar ({@code confirm}): es la operación que SUMA el stock de
  * cada producto y guarda su costo real. A partir de ahí la compra queda
  * CONGELADA y ya no se puede cancelar.
  *
- * <p><b>Cancelar ({@code cancel})</b>: solo borra la compra, y solo si sigue
+ * Cancelar ({@code cancel}): solo borra la compra, y solo si sigue
  * PENDIENTE. Como una compra pendiente nunca tocó el inventario, no hay nada
  * que revertir y el antiguo {@code Math.max(stock - qty, 0)} — que escribía un
  * 0 falso en la BD y devolvía 200 OK — ya no tiene dónde aparecer.
  *
- * <p><b>Por qué el efecto está en confirmar y no en crear</b>: confirmar es lo
+ * Por qué el efecto está en confirmar y no en crear: confirmar es lo
  * que declara que la mercancía llegó de verdad al almacén. Una compra en
  * tránsito se registra sin mover el stock, y si el proveedor no la entrega se
  * borra sin dejar rastro. El estado terminal es lo que protege al inventario,
  * igual que en la venta (V2).
  *
- * <p>El costo del producto ({@code product.cost}) lo escribe CONFIRMAR y no se
+ * El costo del producto ({@code product.cost}) lo escribe CONFIRMAR y no se
  * revierte nunca: es el último costo de compra vigente.
  */
 @Service
@@ -155,24 +155,24 @@ public class PurchaseImpl implements PurchaseService {
     /**
      * CANCELAR una compra: la borra, y solo si sigue PENDIENTE.
      *
-     * <h3>Por qué ahora es tan simple</h3>
+     * Por qué ahora es tan simple
      *
-     * <p>Hasta V2, crear una compra ya sumaba el stock, así que cancelar tenía
-     * que <b>deshacer</b> esa suma y el método era la parte más delicada del
-     * módulo (comprar 10 → vender 5 → cancelar) escribía un
-     * {@code Math.max(stock - qty, 0)} = <b>0 falso</b> con 5 unidades ya
+     * Hasta V2, crear una compra ya sumaba el stock, así que cancelar tenía
+     * que deshacer esa suma y el método era la parte más delicada del
+     * módulo (comprar 10 a vender 5 a cancelar) escribía un
+     * {@code Math.max(stock - qty, 0)} = 0 falso con 5 unidades ya
      * vendidas, y devolvía 200 OK. La defensa era validar renglón por renglón y
      * abortar con 409 sin escribir nada.
      *
-     * <p>Desde V3 esa situación <b>no es representable</b>: mientras la compra
+     * Desde V3 esa situación no es representable: mientras la compra
      * está pendiente nunca tocó el inventario, así que borrarla no deja nada que
      * revertir. El {@code Math.max} ya no tiene dónde aparecer porque el bug
      * que lo motivaba está estructuralmente eliminado, no escondido detrás de
      * una validación.
      *
-     * <p>Una compra CONFIRMADA ya suma stock y define el costo vigente, y es
+     * Una compra CONFIRMADA ya suma stock y define el costo vigente, y es
      * evidencia contable de una entrega real: se rechaza con
-     * <b>409 CONFLICT</b> y no se borra, igual que una venta confirmada (V2).
+     * 409 CONFLICT y no se borra, igual que una venta confirmada (V2).
      */
     @Override
     @Transactional
@@ -197,22 +197,22 @@ public class PurchaseImpl implements PurchaseService {
     /**
      * CONFIRMAR una compra: la mercancía llegó, y solo ahora entra al almacén.
      *
-     * <p>Aquí es donde se suma el stock de cada producto y se guarda
+     * Aquí es donde se suma el stock de cada producto y se guarda
      * {@code product.cost} (el último costo de compra vigente). Desde este
      * punto la compra queda CONGELADA: {@link #cancel(Long)} la rechazará con
      * 409.
      *
-     * <h3>Idempotente a propósito</h3>
+     * Idempotente a propósito
      *
-     * <p>Confirmar una compra ya confirmada devuelve <b>200 OK</b> sin volver
+     * Confirmar una compra ya confirmada devuelve 200 OK sin volver
      * a sumar. Motivo: si dos cajas confirman el mismo clic, o el usuario
      * reintenta tras un corte de red, un 409 sería confuso ("¿no la acabo de
-     * confirmar?"). Lo que no se puede es <b>sumar dos veces</b>, y el
+     * confirmar?"). Lo que no se puede es sumar dos veces, y el
      * {@code if(!purchase.isConfirmed())} lo garantiza: la segunda pasada
      * entra, ve que ya está confirmada y no toca ningún stock. Es el mismo
      * criterio que {@code confirm()} de la venta en V2.
      *
-     * <p><b>Debilidad conocida</b>: dos peticiones simultáneas podrían pasar
+     * Debilidad conocida: dos peticiones simultáneas podrían pasar
      * ambas el {@code if} y devolver el stock dos veces, porque aquí no hay
      * bloqueo pesimista. El arreglo futuro es
      * {@code @Lock(PESSIMISTIC_WRITE)} sobre la lectura de la compra (o un
@@ -270,7 +270,7 @@ public class PurchaseImpl implements PurchaseService {
                 //1) Entra la mercancía al almacén.
                 product.setStock(product.getStock() + detail.getQuantity());
 
-                //2) ⚠️ COSTO: lo que se le PAGA al proveedor. Solo este módulo lo
+                //2) COSTO: lo que se le PAGA al proveedor. Solo este módulo lo
                 //   escribe, porque solo él sabe lo que se pagó. Alimenta
                 //   `GET /api/local/reports/margins` (margen = price - cost) y,
                 //   desde V3, la utilidad de cada venta via sale_details.unitCost.

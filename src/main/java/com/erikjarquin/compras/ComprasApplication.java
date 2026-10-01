@@ -7,7 +7,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 /**
  * Clase principal de Compras-Backend (Spring Boot).
  *
- * <p>{@code @EnableScheduling} activa las tareas programadas, como
+ * @code @EnableScheduling} activa las tareas programadas, como
  * {@code PaymentMonitorJob}, que cada 5 minutos resuelve pagos con tarjeta que
  * quedaron PENDING. El escaneo de componentes (component-scan) cubre
  * automáticamente los paquetes: config, controller, service, repository, model,

@@ -16,10 +16,10 @@ import io.jsonwebtoken.security.Keys;
 /**
  * Utilidades para generar y validar tokens JWT (JSON Web Token).
  *
- * <p>El token es HS256 y su "subject" es el email del usuario.
+ * El token es HS256 y su "subject" es el email del usuario.
  * La expiración es de 5 horas desde su emisión.
  *
- * <p>IMPORTANTE (seguridad): el secreto de firma NO está hardcodeado.
+ * IMPORTANTE (seguridad): el secreto de firma NO está hardcodeado.
  * Se inyecta desde la variable de entorno ${JWT_SECRET}, que en local
  * vive en application-local.yaml y en Railway en las variables del servicio.
  * Un secreto filtrado a Git permitiría a cualquiera forjar tokens de ADMIN.

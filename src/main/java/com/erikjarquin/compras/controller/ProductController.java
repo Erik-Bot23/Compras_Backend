@@ -24,11 +24,11 @@ import com.erikjarquin.compras.util.InputValidator;
 /**
  * CRUD de productos (multipart para la imagen) y búsquedas.
  *
- * <p>Permisos requeridos: VER_PRODUCTOS (listar/buscar), CREAR_PRODUCTOS,
+ * Permisos requeridos: VER_PRODUCTOS (listar/buscar), CREAR_PRODUCTOS,
  * EDITAR_PRODUCTOS, ELIMINAR_PRODUCTOS (borrado real, solo sin histórico),
  * DESACTIVAR_PRODUCTOS y ACTIVAR_PRODUCTOS (borrado/alta lógica).
  *
- * <p>Nota CORS: el origen permitido se define globalmente en SecurityConfig
+ * Nota CORS: el origen permitido se define globalmente en SecurityConfig
  * (propiedad ${CORS_ALLOWED_ORIGINS}); por eso aquí ya NO hay @CrossOrigin.
  */
 @RestController
@@ -53,7 +53,7 @@ public class ProductController {
     /**
      * Crear un nuevo producto.
      *
-     * <p><b>price y stock llegan como String y no como BigDecimal/int (V3).</b> A
+     * price y stock llegan como String y no como BigDecimal/int (V3). A
      * propósito: para poder rechazar "1.875", "000.2" o "1e5" hay que mirar el
      * TEXTO que escribió el usuario. Si Spring lo convirtiese primero, "000.2"
      * ya habría llegado como {@code 0.2} y el cero a la izquierda se habría

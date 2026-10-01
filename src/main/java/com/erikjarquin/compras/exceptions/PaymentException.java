@@ -5,8 +5,8 @@ import org.springframework.http.HttpStatus;
 /**
  * Excepción de negocio del módulo de PAGOS.
  *
- * <p>El {@link GlobalExceptionHandler} deduce el HTTP status a partir del texto
- * del mensaje (timeout → 408, problema de terminal → 502, rechazo → 402).
+ * El {@link GlobalExceptionHandler} deduce el HTTP status a partir del texto
+ * del mensaje (timeout a 408, problema de terminal a 502, rechazo a 402).
  * Opcionalmente se puede fijar un estado explícito con el segundo constructor
  * para que viaje de forma directa en {@link #getStatus()}.
  */

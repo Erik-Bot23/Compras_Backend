@@ -20,7 +20,7 @@ import com.erikjarquin.compras.service.CashRegisterService;
 /**
  * Caja registradora: apertura, cierre, resumen y consulta de caja activa.
  *
- * <p>Permisos: ABRIR_CAJA, CERRAR_CAJA, VER_CAJA, CORTE_CAJA.
+ * Permisos: ABRIR_CAJA, CERRAR_CAJA, VER_CAJA, CORTE_CAJA.
  * CORS global (${CORS_ALLOWED_ORIGINS}) en SecurityConfig.
  */
 @RestController
@@ -43,7 +43,7 @@ public class CashRegisterController {
      * CREAR una caja física (V3). La caja queda registrada pero NO abierta: se
      * abre después eligiéndola en {@code POST /open}.
      *
-     * <p>Se separa de "abrir" porque el número tiene que existir antes para poder
+     * Se separa de "abrir" porque el número tiene que existir antes para poder
      * elegirse. Un 409 si el número ya existe: sin unicidad, dos cortes distintos
      * se mezclarían al filtrar reportes por caja.
      */
@@ -56,7 +56,7 @@ public class CashRegisterController {
     /**
      * Cajas todavía sin abrir: las que se pueden elegir para abrir.
      *
-     * <p>Usa {@code ABRIR_CAJA} y no {@code VER_CAJA} porque es el insumo directo
+     * Usa {@code ABRIR_CAJA} y no {@code VER_CAJA} porque es el insumo directo
      * de "abrir caja": quien puede abrir necesita saber qué cajas hay.
      */
     @PreAuthorize("hasAuthority('ABRIR_CAJA')")

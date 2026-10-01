@@ -17,17 +17,17 @@ import org.springframework.web.multipart.MultipartFile;
 /**
  * Servicio de almacenamiento de imágenes en disco.
  *
- * <p>Funciona a nivel local y Docker. La carpeta de destino se configura con
+ * Funciona a nivel local y Docker. La carpeta de destino se configura con
  * {@code app.upload-dir} en application.yaml (default: ./uploads).
  *
- * <p>SEGURIDAD: los archivos subidos pueden ser peligrosos si se sirven luego
+ * SEGURIDAD: los archivos subidos pueden ser peligrosos si se sirven luego
  * públicamente (como hace {@code /api/uploads/**}). Por eso aquí se valida:
  *   1. Tamaño máximo (5 MB).
  *   2. Extensión permitida (solo imágenes).
  *   3. Contenido REAL mediante "magic bytes" (los primeros bytes del archivo),
  *      para que un `.exe` renombrado a `.jpg` sea rechazado.
  *
- * <p>Los archivos se guardan con un nombre UUID + extensión (nunca con el nombre
+ * Los archivos se guardan con un nombre UUID + extensión (nunca con el nombre
  * original del usuario), evitando colisiones y rutas peligrosas (path traversal).
  */
 @Service

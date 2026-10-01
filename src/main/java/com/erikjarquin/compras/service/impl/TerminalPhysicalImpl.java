@@ -29,13 +29,13 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * Implementación para una terminal de pagos FÍSICA conectada por Socket TCP.
  *
- * <p>Se activa solo si {@code payment.terminal.type=PHYSICAL}
+ * Se activa solo si {@code payment.terminal.type=PHYSICAL}
  * (@ConditionalOnProperty). Protocolo de mensajes por líneas de texto:
  *  - PAY|merchant|terminal|monto|método|transactionId  → cobro
  *  - REV|merchant|terminal|transactionId                → reversa
  *  - STS|merchant|terminal|transactionId                → consulta de estado
  *
- * <p>Todo el tráfico pasa por {@link #sendRaw(String)}, que abre el socket,
+ * Todo el tráfico pasa por {@link #sendRaw(String)}, que abre el socket,
  * respeta el timeout configurado y devuelve la línea de respuesta.
  */
 @Slf4j
@@ -89,7 +89,7 @@ public class TerminalPhysicalImpl implements TerminalService {
     /**
      * Envía un mensaje de texto al socket de la terminal y lee la respuesta.
      *
-     * <p>Método base para PAY/REV/STS: abre conexión, configura timeout,
+     * Método base para PAY/REV/STS: abre conexión, configura timeout,
      * escribe una línea y espera una línea de respuesta.
      */
     private String sendRaw(String message) throws IOException {

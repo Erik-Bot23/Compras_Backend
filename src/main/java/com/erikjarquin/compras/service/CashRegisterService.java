@@ -11,15 +11,13 @@ import com.erikjarquin.compras.model.dto.Cash.OpenCashRequest;
 /**
  * Contrato de la caja registradora.
  *
- * <p><b>V3 (2026-09-30): la caja se crea antes de abrirse.</b> Antes el único
+ * V3 (2026-09-30): la caja se crea antes de abrirse. Antes el único
  * punto de entrada era {@code open()}, que creaba la fila y le ponía el número.
  * Ahora hay dos pasos, y por eso existe {@link #create}:
- * <ol>
- *   <li>{@code create} registra la caja física (queda sin abrir).</li>
- *   <li>{@code open} elige una de las registradas y la abre.</li>
- * </ol>
+ *   {@code create} registra la caja física (queda sin abrir).
+ *   {@code open} elige una de las registradas y la abre.
  *
- * <p>El motivo es que el número debe existir antes de abrir para poder elegirse
+ * El motivo es que el número debe existir antes de abrir para poder elegirse
  * de una lista. Ver el javadoc de {@code CashRegisterImpl} para el detalle y
  * para por qué una caja no se puede abrir dos veces.
  *

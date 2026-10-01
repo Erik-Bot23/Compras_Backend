@@ -5,7 +5,7 @@ import org.springframework.http.HttpStatus;
 /**
  * Excepción de negocio del módulo de PRODUCTOS (catálogo de /api/local/products).
  *
- * <p>Por defecto 404 NOT_FOUND. Se puede indicar otro HttpStatus con el segundo
+ * Por defecto 404 NOT_FOUND. Se puede indicar otro HttpStatus con el segundo
  * constructor, p. ej. 409 para "producto con ventas o compras asociadas" (no se
  * puede borrar físicamente porque rompería el histórico).
  */

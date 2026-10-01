@@ -13,17 +13,16 @@ import com.erikjarquin.compras.model.dto.Sale.SaleResponse;
  * consultar historial y gestionar su ciclo de vida. Ver
  * {@code service/impl/SaleImpl}.
  *
- * <h2>Ciclo de vida (agregado 2026-09-30)</h2>
+ * Ciclo de vida (agregado 2026-09-30)
  *
- * <p>Una venta nace ABIERTA ({@code confirmed=false}, {@code cancelled=false}).
+ * Una venta nace ABIERTA ({@code confirmed=false}, {@code cancelled=false}).
  * Desde ahí tiene exactamente dos salidas y nunca vuelve atrás:
- * <ul>
- *   <li>{@link #confirm} → CONGELADA. Irreversible: ni anular ni borrar.</li>
- *   <li>{@link #cancel}  → ANULADA. El stock vuelve al inventario y la fila se
- *       conserva (auditoría). Sólo efectivo y sólo si no está confirmada.</li>
- * </ul>
+ * 
+ *  {@link #confirm} → CONGELADA. Irreversible: ni anular ni borrar.
+ *  {@link #cancel}  → ANULADA. El stock vuelve al inventario y la fila se
+ *       conserva (auditoría). Sólo efectivo y sólo si no está confirmada.
  *
- * <p>Por qué existe: si se pudiera anular una venta consumida por el cliente, el
+ * Por qué existe: si se pudiera anular una venta consumida por el cliente, el
  * inventario volvería a contar mercadería que ya salió, y en cascada eso
  * permitiría cancelar una COMPRA cuyo stock ya se vendió, dejando el almacén
  * con números que no corresponden a la realidad (ver {@code PurchaseImpl.cancel}).

@@ -41,11 +41,11 @@ import com.erikjarquin.compras.service.ReportsService;
  * SaleRepository/ProductRepository) y aquí solo se transforman a DTO, de forma
  * que el frontend reciba ya agregado y solo tenga que graficar.
  *
- * <p>Se contabilizan únicamente ventas con paymentStatus APPROVED (excluye
+ * Se contabilizan únicamente ventas con paymentStatus APPROVED (excluye
  * PENDING el monitor está atendiendo, REJECTED y REVERSED).
  *
- * <p>Y además NO anuladas (V3, 2026-09-30). Anular una venta deja la
- * fila con {@code cancelled = true} —a propósito, es evidencia contable— pero
+ * Y además NO anuladas (V3, 2026-09-30). Anular una venta deja la
+ * fila con {@code cancelled = true} a propósito, es evidencia contable pero
  * NO cambia el {@code paymentStatus}, que sigue en APPROVED. Filtrar solo por
  * APPROVED hacía que una venta anulada siguiera sumando ingresos; con la
  * utilidad nueva también habría summedo costo. Por eso las consultas de
@@ -213,12 +213,12 @@ public class ReportsImpl implements ReportsService {
     /**
      * UTILIDAD del periodo (V3): ingresos − costo de lo vendido.
      *
-     * <p>El costo de lo vendido sale de {@code sumCostOfGoodsSold}, que suma
+     * El costo de lo vendido sale de {@code sumCostOfGoodsSold}, que suma
      * {@code quantity * unitCost} de los renglones: el costo congelado en cada
      * venta. No se usa {@code product.cost} porque es el del último purchase de
      * hoy; comprar algo más barato mañana cambiaría la utilidad de ayer.
      *
-     * <p>El margen se calcula sobre VENTA, que es como se mide el markup de un
+     * El margen se calcula sobre VENTA, que es como se mide el markup de un
      * comercio. Se devuelve 0 (y no se divide entre cero) cuando no hubo
      * ingresos en el periodo.
      */
@@ -265,10 +265,10 @@ public class ReportsImpl implements ReportsService {
     /**
      * Detalle de UNA caja (V3): sus ventas y su utilidad.
      *
-     * <p>Las ventas se leen por {@code cash_register_id} y se filtran las
+     * Las ventas se leen por {@code cash_register_id} y se filtran las
      * anuladas. El costo se calcula recorriendo los renglones en vez de usar una
      * consulta agregada porque aquí el rango es una caja, no fechas: el filtro
-     * por fechas no aplica y forzar la agenda "openedAt→closedAt" dejaría fuera
+     * por fechas no aplica y forzar la agenda "openedAt a closedAt" dejaría fuera
      * las ventas de una caja abierta.
      */
     @Override

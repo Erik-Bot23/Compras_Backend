@@ -11,13 +11,13 @@ import com.erikjarquin.compras.repository.RoleRepository;
 /**
  * Bootstrap (@Order 1) que crea los roles base (ADMIN, CAJERO, ALMACENISTA).
  *
- * <p>Se ejecuta antes que AdminBootstrap (que necesita el rol ADMIN).
+ * Se ejecuta antes que AdminBootstrap (que necesita el rol ADMIN).
  *
- * <p><b>Regla:</b> solo se crean roles si la tabla está VACÍA (primer arranque).
+ * Regla: solo se crean roles si la tabla está VACÍA (primer arranque).
  * Si ya existen roles (por mínima intervención manual o un arranque previo),
  * NO se tocan: los roles que borres a mano se quedan borrados.
  *
- * <p>Se respeta {@code app.seed-bootstraps}: en false este bootstrap no hace nada.
+ * Se respeta {@code app.seed-bootstraps}: en false este bootstrap no hace nada.
  */
 @Component
 @Order(1)

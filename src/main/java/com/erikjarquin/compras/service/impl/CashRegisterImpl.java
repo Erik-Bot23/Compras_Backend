@@ -3,7 +3,6 @@ package com.erikjarquin.compras.service.impl;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -25,29 +24,29 @@ import com.erikjarquin.compras.service.CashRegisterService;
 /**
  * Implementación de la caja registradora.
  *
- * <p><b>El modelo cambió en V3 (2026-09-30): la caja se CREA antes de abrirse.</b>
+ * El modelo cambió en V3 (2026-09-30): la caja se CREA antes de abrirse.
  * Antes, {@code POST /open} creaba la fila y el número se escribía en ese
  * momento. Ahora hay dos pasos:
- * <ol>
- *   <li>{@link #create(CreateCashRequest)}: se registra la caja física con su
- *       número. La fila nace con {@code openedAt = null}.</li>
- *   <li>{@link #open(OpenCashRequest)}: se elige una de las cajas ya registradas
- *       y se abre. El número tiene que existir antes para poder elegirlo.</li>
- * </ol>
+ * 
+ * {@link #create(CreateCashRequest)}: se registra la caja física con su
+ *       número. La fila nace con {@code openedAt = null}.
+ * {@link #open(OpenCashRequest)}: se elige una de las cajas ya registradas
+ *       y se abre. El número tiene que existir antes para poder elegirlo.
+ * 
  *
- * <p><b>Consecuencia: una caja se abre UNA sola vez.</b> El número es UNIQUE, o
+ * Consecuencia: una caja se abre UNA sola vez. El número es UNIQUE, o
  * sea una fila por caja física, así que reabrir "CAJA 1" metería dos turnos en
  * el mismo corte y el reporte por caja mostraría ventas de la mañana junto a
  * ventas de la tarde como si fueran del mismo turno. Para un turno nuevo se crea
  * "CAJA 2".
  *
- * <p>Reglas que se siguen respetando:
- * <ul>
- *   <li><b>Una sola caja abierta a la vez</b> (409 si ya hay una).</li>
- *   <li><b>El fondo inicial mínimo es 100</b> y nunca negativo.</li>
- *   <li><b>El cierre exige cuadrar el efectivo</b>, con salida de emergencia que
- *       pide un motivo.</li>
- * </ul>
+ * Reglas que se siguen respetando:
+ * 
+ * Una sola caja abierta a la vez (409 si ya hay una).
+ * El fondo inicial mínimo es 100 y nunca negativo.
+ * El cierre exige cuadrar el efectivo, con salida de emergencia que
+ *       pide un motivo.
+ * 
  */
 @Service
 public class CashRegisterImpl implements CashRegisterService {
@@ -55,7 +54,7 @@ public class CashRegisterImpl implements CashRegisterService {
     /**
      * Fondo mínimo con el que se puede abrir una caja (decisión del dueño).
      *
-     * <p>Además de sentido practical (una caja con 0 no alcanza ni para una
+     * Además de sentido practical (una caja con 0 no alcanza ni para una
      * venta), evita que un forgot del campo se guarde como 0 y/contamine el
      * "esperado" del corte sin que nadie lo note.
      */
@@ -91,7 +90,7 @@ public class CashRegisterImpl implements CashRegisterService {
     /**
      * Registra una caja nueva, todavía sin abrir.
      *
-     * <p>La fila nace con {@code openedAt = null} y {@code active = false}, que
+     * La fila nace con {@code openedAt = null} y {@code active = false}, que
      * es lo que la distingue de una caja ya cerrada (esa tiene ambos
      * informados). En V1 {@code opened_at} y {@code opening_amount} ya eran
      * nullable, así que no hizo falta alterar la tabla para soportar cajas que
@@ -136,8 +135,8 @@ public class CashRegisterImpl implements CashRegisterService {
     /**
      * Sugiere el siguiente número libre con el patrón "CAJA n" (V3).
      *
-     * <p>Existe para que el modal de crear caja venga con "CAJA 7" ya escrito en
-     * vez de obligar a contar cuántas hay. Solo <b>sugiere</b>: el usuario puede
+     * Existe para que el modal de crear caja venga con "CAJA 7" ya escrito en
+     * vez de obligar a contar cuántas hay. Solo sugiere: el usuario puede
      * cambiarlo, y si elSuggested número ya existe, {@link #create} lo rechaza
      * con 409 en vez de fallar en silencio.
      */
@@ -174,15 +173,15 @@ public class CashRegisterImpl implements CashRegisterService {
     /**
      * Abre una caja YA REGISTRADA (V3).
      *
-     * <p>Tres validaciones, en este orden y por razones distintas:
-     * <ol>
-     *   <li><b>Solo una caja abierta a la vez</b>: si ya hay una activa, 409.
-     *       Es la regla de siempre, no cambia.</li>
-     *   <li><b>La caja debe existir</b>: 404 si el número no está registrado. No
-     *       se crea al vuelo como antes, porque el número tiene que poder elegirse.</li>
-     *   <li><b>La caja no puede haberse usado antes</b>: 409 si {@code openedAt}
-     *       ya está informado, porque una caja es un turno.</li>
-     * </ol>
+     * Tres validaciones, en este orden y por razones distintas:
+     * 
+     *   Solo una caja abierta a la vez: si ya hay una activa, 409.
+     *       Es la regla de siempre, no cambia.
+     *   La caja debe existir: 404 si el número no está registrado. No
+     *       se crea al vuelo como antes, porque el número tiene que poder elegirse.
+     *   La caja no puede haberse usado antes: 409 si {@code openedAt}
+     *       ya está informado, porque una caja es un turno.
+     * 
      */
     @Override
     @Transactional
@@ -233,7 +232,7 @@ public class CashRegisterImpl implements CashRegisterService {
     /**
      * Valida el fondo inicial: obligatorio, no negativo y mínimo 100.
      *
-     * <p>Se hace aquí y no con {@code @Valid} en el DTO porque el mensaje puede
+     * Se hace aquí y no con {@code @Valid} en el DTO porque el mensaje puede
      * decir qué límite se rompió y por qué, que es más útil que "validation
      * failed".
      */
@@ -258,14 +257,14 @@ public class CashRegisterImpl implements CashRegisterService {
     /**
      * Cierra la caja exigiendo que el efectivo contado cuadre.
      *
-     * <h3>Por qué bloquea y por qué tiene salida</h3>
+     * Por qué bloquea y por qué tiene salida
      *
-     * <p>Si el efectivo contado no coincide con el esperado, el cierre se rechaza
-     * con <b>409</b>. La razón de fondo: el dinero que falta en el cajón es dinero
+     * Si el efectivo contado no coincide con el esperado, el cierre se rechaza
+     * con 409. La razón de fondo: el dinero que falta en el cajón es dinero
      * que salió del negocio, y un corte que "cierra igual" convierte un robo en
      * un descuadre invisible.
      *
-     * <p>Pero bloquear sin salida tiene un costo real: si el cajero se equivocó al
+     * Pero bloquear sin salida tiene un costo real: si el cajero se equivocó al
      * contar, o un cliente entregó un billete falso y le dio mal el cambio, el
      * turno quedaría encerrado y no se podría cerrar hasta que alguien investigue.
      * Por eso existe {@code differenceReason}: si el cajero está seguro del monto
@@ -357,7 +356,7 @@ public class CashRegisterImpl implements CashRegisterService {
     /**
      * Normaliza el número de caja: recorta y <b>capitaliza</b>.
      *
-     * <p>Se capitaliza a propósito: "caja 1" y "CAJA 1" son la MISMA caja y
+     * Se capitaliza a propósito: "caja 1" y "CAJA 1" son la MISMA caja y
      * deben ser el mismo número. Sin esto el UNIQUE de PostgreSQL los dejaría
      * pasar como dos cajas distintas (compara las mayúsculas y minúsculas tal
      * cual) y el reporte de esa caja mesclaría dos cortes reales.
@@ -428,7 +427,7 @@ public class CashRegisterImpl implements CashRegisterService {
      * Calcula el resumen del corte: totales por método de pago y el efectivo
      * esperado (fondo inicial + ventas en efectivo).
      *
-     * <p>Las ventas ANULADAS se saltan: anular una venta en efectivo no devuelve
+     * Las ventas ANULADAS se saltan: anular una venta en efectivo no devuelve
      * el dinero al cajón, así que su monto ya no está ahí. Contarlas dejaría su
      * dinero dentro del "esperado" y el cajero vería una diferencia fantasma de
      * su propio bolsillo. Mismo criterio que el filtro

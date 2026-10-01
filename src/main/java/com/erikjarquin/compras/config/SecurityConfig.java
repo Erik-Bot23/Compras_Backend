@@ -21,22 +21,21 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 /**
  * Configuración central de seguridad.
  *
- * <p>Modelo: API stateless con JWT. CSRF desactivado (no hay cookies de sesión),
+ * Modelo: API stateless con JWT. CSRF desactivado (no hay cookies de sesión),
  * CORS limitado a los orígenes permitidos y autorización por PERMISO
  * mediante {@code @PreAuthorize} en cada controller.
  *
- * <p>La API está dividida en DOS prefijos (ver docs/PLAN.md §1-§2):
- * <ul>
- *   <li>{@code /api/local/**} — POS y gestión, lo usa el empleado desde Angular.
+ * La API está dividida en DOS prefijos (ver docs/PLAN.md §1-§2):
+ * 
+ * {@code /api/local/**} — POS y gestión, lo usa el empleado desde Angular.
  *       Todo es autenticado con JWT de empleado y se autoriza con
- *       {@code @PreAuthorize("hasAuthority('...')")}.</li>
- *   <li>{@code /api/tienda/**} — storefront, lo usa el cliente desde Next.js.
- *       Nace en la Fase 3; el catálogo será de solo lectura y público.</li>
- * </ul>
+ *       {@code @PreAuthorize("hasAuthority('...')")}.
+ * {@code /api/tienda/**} — storefront, lo usa el cliente desde Next.js.
+ *       Nace en la Fase 3; el catálogo será de solo lectura y público.
  *
- * <p>Los endpoints públicos son: {@code OPTIONS /**} (preflight),
+ * Los endpoints públicos son: {@code OPTIONS /**} (preflight),
  * {@code /api/local/auth/**} (login/recuperación de empleados) y
- * {@code /api/uploads/**} (imágenes de platillos: las consume el POS <b>y</b> el
+ * {@code /api/uploads/**} (imágenes de platillos: las consume el POS el
  * catálogo público del storefront, así que este prefijo NO se mueve bajo
  * {@code /api/local}).
  */

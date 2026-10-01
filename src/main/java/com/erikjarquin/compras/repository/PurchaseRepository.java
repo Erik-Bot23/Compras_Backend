@@ -15,7 +15,7 @@ import com.erikjarquin.compras.model.entity.PurchaseEntity;
 /**
  * Repositorio de compras (cabecera).
  *
- * <p>findAll/findByProvider/findDetailedById usan {@code @EntityGraph} para
+ * findAll/findByProvider/findDetailedById usan {@code @EntityGraph} para
  * precargar provider + details.product en UNA consulta (evita N+1 en los
  * listados) y así el mapper puede leer product.name sin volver a tocar la BD.
  */
@@ -36,29 +36,27 @@ public interface PurchaseRepository extends JpaRepository<PurchaseEntity, Long> 
     long countByProvider_Id(Long providerId);
 
     /**
-     * Marca la compra como CONFIRMADA de forma <b>atómica y condicional</b> (V3).
+     * Marca la compra como CONFIRMADA de forma atómica y condicional (V3).
      *
-     * <p>Devuelve el número de filas afectadas, y eso es lo importante:
-     * <ul>
-     *   <li><b>1</b> → esta petición ganó la carrera: puede aplicar el stock.</li>
-     *   <li><b>0</b> → ya estaba confirmada, así que otra petición se adelantó.
-     *       Quien pierde NO debe tocar el stock.</li>
-     * </ul>
+     * Devuelve el número de filas afectadas, y eso es lo importante:
+     *   1 a esta petición ganó la carrera: puede aplicar el stock.
+     *   0 a ya estaba confirmada, así que otra petición se adelantó.
+     *       Quien pierde NO debe tocar el stock
      *
-     * <h3>Por qué esto y no un simple {@code if}</h3>
+     * Por qué esto y no un simple {@code if}
      *
-     * <p>Un {@code if (entity.isConfirmed())} lee la fila y decide en Java. Con
-     * dos peticiones simultáneas, <b>las dos leen {@code false}</b> antes de que
+     * Un {@code if (entity.isConfirmed())} lee la fila y decide en Java. Con
+     * dos peticiones simultáneas,las dos leen {@code false} antes de que
      * ninguna escriba, y las dos suman el stock: la compra termina con el doble
      * de mercancía.
      *
-     * <p>Esta variante lo resuelve en UNA sentencia de SQL. El {@code WHERE
+     * Esta variante lo resuelve en UNA sentencia de SQL. El {@code WHERE
      * confirmed = false} hace que la segunda transacción espere al lock de fila
      * de la primera y, al reevaluar la condición, ya no se cumpla y devuelva
      * 0. La condición y la escritura son atómicas juntas, que es justo lo que el
      * {@code if} no era.
      *
-     * <p>Se prefirió esto a {@code @Lock(PESSIMISTIC_WRITE)} porque no mantiene
+     * Se prefirió esto a {@code @Lock(PESSIMISTIC_WRITE)} porque no mantiene
      * un lock de fila abierto durante todo el {@code @Transactional} (incluidos
      * los {@code save()} de cada producto del renglón) y porque no depende de que
      * nadie se acuerde de anotar el método de lectura.
