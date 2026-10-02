@@ -15,6 +15,7 @@ import com.erikjarquin.compras.model.entity.UserEntity;
 import com.erikjarquin.compras.repository.RoleRepository;
 import com.erikjarquin.compras.repository.UserRepository;
 import com.erikjarquin.compras.service.UserService;
+import com.erikjarquin.compras.util.InputValidator;
 
 /**
  * Implementación de usuarios. Reglas de negocio:
@@ -53,8 +54,10 @@ public class UserImpl implements UserService {
 
         UserEntity user = new UserEntity();
 
-        user.setName(request.getName());
-        user.setEmail(request.getEmail());
+        String userName = InputValidator.texto(request.getName(), "nombre del usuario", 50);
+        String emailUser = InputValidator.email(request.getEmail());
+        user.setName(userName);
+        user.setEmail(emailUser);
         user.setPassword(passwordEncoder.encode(request.getPassword()));
 
         RoleEntity role = roleRepository.findById(request.getRoleId()).orElseThrow(() -> 

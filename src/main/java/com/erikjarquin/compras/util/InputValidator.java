@@ -310,6 +310,60 @@ public final class InputValidator {
     }
 
     /**
+     * Email de forma básica, 120 caracteres es el tope práctico de una columna de correo
+     */
+    public static String email(String valor){
+        String correo = valor == null ? null : valor.trim().toLowerCase();
+
+        if (correo == null || correo.isEmpty()) return null;
+
+        if (correo.length() > 120) {
+            throw new IllegalArgumentException("El correo no puede tener más de 120 caracteres.");
+        }
+
+        if (!correo.matches("^[^\\s@]+@[^\\s@]+\\.[a-z]{2,}$")) {
+            throw new IllegalArgumentException("El correo no es válido");
+        }
+
+        return correo;
+    }
+
+    /**
+     *Texto libre con límite, sin saltos de línea.
+     *Para nombre de categoría y de rol: un "Bebidas\nRicas" descoloca la fila
+    */
+   public static String texto(String valor, String campo, int max){
+    String limpio = valor == null ? null : valor.trim();
+
+    if (limpio == null || limpio.isEmpty()) return null;
+    
+    if (limpio.length() > max) {
+        throw new IllegalArgumentException("El " + campo + " no puede tener más de " + max + " caracteres (llevas " + limpio.length() + ").");
+    }
+
+    if (limpio.matches(".*[\\n\\r\\t].*")) {
+        throw new IllegalArgumentException("El " + campo + " no puede tener saltos de línea ni tabulaciones.");
+    }
+
+    return limpio.toUpperCase();
+   }
+
+   /** 
+    * Teléfono: dígitos, espacios, guiones, paréntesis y más.
+   */
+  public static String telefono(String valor){
+    String tel = valor == null ? null : valor.trim();
+
+    if (tel == null || tel.isEmpty()) return null;
+
+    if (!tel.matches("^[0-9\\s()+-]+$")) {
+        throw new IllegalArgumentException("El teléfono solo admite números, espacios, guions y paréntesis");
+    }
+
+    return tel;
+  }
+
+    /**
      * Rechaza ceros a la izquierda: "000.2" y "007" no son números válidos de
      * captura, son errores de dedo.
      *

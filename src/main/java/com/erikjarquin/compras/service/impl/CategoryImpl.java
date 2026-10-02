@@ -13,6 +13,7 @@ import com.erikjarquin.compras.model.entity.CategoryEntity;
 import com.erikjarquin.compras.repository.CategoryRepository;
 import com.erikjarquin.compras.repository.ProductRepository;
 import com.erikjarquin.compras.service.CategoryService;
+import com.erikjarquin.compras.util.InputValidator;
 
 /**
  * Implementación de categorías de productos. No deja borrar una categoría
@@ -41,6 +42,7 @@ public class CategoryImpl implements CategoryService {
     //Guaradar la nueva categoría
     @Override
     public CategoryDto save(CategoryDto dto){
+        dto.setName(InputValidator.texto(dto.getName(), "nombre de la categoria",50));
         validateCategoryName(dto.getName());
 
         if(repository.findByName(dto.getName()).isPresent()){
@@ -58,6 +60,8 @@ public class CategoryImpl implements CategoryService {
     public CategoryDto update(Long id, CategoryDto dto){
         CategoryEntity category = repository.findById(id).orElseThrow(() ->
             new CategoryException("Categoría no encontrada"));
+
+        dto.setName(InputValidator.texto(dto.getName(), "nombre de la categoria",50));
 
         validateCategoryName(dto.getName());
 

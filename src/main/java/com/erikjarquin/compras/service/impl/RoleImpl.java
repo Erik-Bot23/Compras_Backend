@@ -20,6 +20,7 @@ import com.erikjarquin.compras.exceptions.RoleException;
 import com.erikjarquin.compras.repository.RoleRepository;
 import com.erikjarquin.compras.repository.UserRepository;
 import com.erikjarquin.compras.service.RoleService;
+import com.erikjarquin.compras.util.InputValidator;
 
 /**
  * Implementación de roles y su relación N:M con permisos.
@@ -66,7 +67,8 @@ public class RoleImpl implements RoleService {
         Set<PermissionEntity> permissions = findPermissions(request.getPermissions());
 
         RoleEntity role = new RoleEntity();
-        role.setName(request.getName());
+        String nombre = InputValidator.texto(request.getName(), "nombre del rol", 50);
+        role.setName(nombre);
         role.setPermissions(permissions);
 
         RoleEntity saved = repository.save(role);
@@ -86,7 +88,8 @@ public class RoleImpl implements RoleService {
         }
 
         Set<PermissionEntity> permissions = findPermissions(request.getPermissions());
-        role.setName(request.getName());
+        String nombre = InputValidator.texto(request.getName(), "nombre del rol", 50);
+        role.setName(nombre);
         role.setPermissions(permissions);
 
         RoleEntity updated = repository.save(role);

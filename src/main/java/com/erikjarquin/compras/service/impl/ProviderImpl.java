@@ -52,6 +52,10 @@ public class ProviderImpl implements ProviderService {
     public ProviderDto save(ProviderDto dto){
         validateRequired(dto);
 
+        //Normalizamos antes de mapear
+        dto.setPhone(InputValidator.telefono(dto.getPhone()));
+        dto.setEmail(InputValidator.email(dto.getEmail()));
+
         if(repository.findByRfc(dto.getRfc()).isPresent()){
             throw new ProviderException("Ya existe un proveedor con ese RFC", HttpStatus.CONFLICT);
         }
@@ -72,7 +76,9 @@ public class ProviderImpl implements ProviderService {
             }
         });
 
-entity.setName(normalizarNombre(dto.getName()));
+        entity.setName(normalizarNombre(dto.getName()));
+        entity.setPhone(InputValidator.telefono(dto.getPhone()));
+        entity.setEmail(InputValidator.email(dto.getEmail()));
         entity.setRfc(InputValidator.rfc(dto.getRfc()));
         entity.setPhone(dto.getPhone());
         entity.setEmail(dto.getEmail());
