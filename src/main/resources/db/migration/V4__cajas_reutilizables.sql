@@ -40,7 +40,7 @@ SELECT DISTINCT c.number,
 
 
 --3. cash_registers apunta a su caja
-ALTER TABLE public.cash_registers ADD COLUMUN IF NOT EXISTS cash_box_id bigint;
+ALTER TABLE public.cash_registers ADD COLUMN IF NOT EXISTS cash_box_id bigint;
 
 --Cada corte se asigna a la caja con el mismo número que tenía
 UPDATE public.cash_registers c
