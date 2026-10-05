@@ -50,10 +50,27 @@ public class ProductEntity {
 
     private String img;
 
-    @Column(unique = true)
+    /**
+     * Código de barras del producto (V7: <b>obligatorio</b>).
+     *
+     * <p>`nullable = false` debe ir ACOMPAÑADO del `NOT NULL` de la migración
+     * {@code V7__campos_obligatorios.sql}, y no al revés. La aplicación corre
+     * con {@code ddl-auto: validate}, así que Hibernate no toca el esquema: solo
+     * lo <b>comprueba</b> al arrancar. Si la entidad dice que no puede ser nulo y
+     * la columna lo permite, la aplicación <b>no levanta</b>, y ese arranque
+     * fallido es justamente la red que hace honesto mantener las dos cosas
+     * sincronizadas.
+     */
+    @Column(unique = true, nullable = false)
     private String barcode;
 
-    @Column(unique = true)
+    /**
+     * SKU del producto (V7: <b>obligatorio</b>).
+     *
+     * <p>Mismo criterio que {@link #barcode}: el {@code nullable = false} de aquí
+     * y el {@code NOT NULL} de la base van de la mano.
+     */
+    @Column(unique = true, nullable = false)
     private String sku;
 
     /**

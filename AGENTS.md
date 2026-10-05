@@ -56,6 +56,144 @@ Base de los 12 módulos = `/api/local`:
 
 ## Registro de cambios / decisiones
 
+### 2026-10-04 (2) — V7: ningún campo obligatorio se guarda como NULL
+
+> Encargo: *"validar que no se guarden los campos como null: nombre de
+> categorías, nombre de usuario, correo, contraseña, nombre de rol, sku,
+> barcode, nombre de proveedor y rfc de proveedor"*.
+> Migración `V7__campos_obligatorios.sql`, **aplicada y registrada** en Supabase.
+> **294/294 tests** en verde. Verificado con 12 peticiones reales contra la API.
+
+#### 0. El resultado de la auditoría: la respuesta era **desigual**
+
+Antes de tocar nada se auditó campo por campo. El hallazgo importante es que
+**no era un problema uniforme**, y por eso la solución tampoco:
+
+| Campo | Antes | Ahora |
+|---|---|---|
+| Categoría, rol, proveedor (nombre/RFC) | **3 capas**: validador + `@Column(nullable=false)` + `NOT NULL` | Sin cambios |
+| Usuario · nombre, correo (alta) | Solo lo frenaba el `NOT NULL` de la base | `requerido()` + formato |
+| Usuario · nombre, correo (**edición**) | **NADA**: se copiaba el texto crudo | `requerido()` + formato + duplicados |
+| Usuario · contraseña | **NADA** | `requerida()` + mínimo 8 |
+| Producto · SKU, barcode | Opcionales **por decisión** | **Obligatorios** + `NOT NULL` |
+
+🔑 El 2026-09-12 quedó escrito que *"el carrito del POS no se pagina"* y el
+2026-09-28 que *"el SKU es opcional"*. **Las dos decisiones estaban bien
+razonadas y las dos se revierten**, cada una por un motivo de operación, no de
+gusto. Lo que falla es dejar escrito un "es opcional" sin anotar la condición
+que lo(reverse).
+
+#### 1. El bug más caro: **una contraseña vacía SÍ se guardaba**
+
+```java
+user.setPassword(passwordEncoder.encode(request.getPassword()));  // sin validar
+```
+
+🔑 `BCryptPasswordEncoder.encode("")` **no lanza nada**: devuelve un hash
+perfectamente válido. O sea que un alta de usuario con la contraseña en blanco
+creaba la cuenta y la fila en la base. El problema aparecía **después**, al
+intentar entrar: `matches("", hash)` devuelve `false` **siempre**, así que esa
+persona quedaba bloqueada para siempre y sin explicación.
+
+**Un dato basura en la base y un ticket de soporte que nadie puede resolver.**
+
+Por eso `InputValidator.password()` se llama **ANTES** de `encode()`, no
+después: validar el hash sería demasiado tarde. Hay un test que lo fija con un
+`BCryptPasswordEncoder` **real** (no el mock), porque lo que se documenta es el
+comportamiento de la librería.
+
+#### 2. Los validadores que faltaban: `requerido()` y `requerida()`
+
+`InputValidator` tenía 8 validadores de **formato** y **ninguno de
+obligatoriedad**. Por eso tres servicios escribieron su propio `if (x == null)
+throw` (categoría, rol, proveedor) y el de usuario **se olvidó**: el `null`
+llegaba al `INSERT`.
+
+- `requerido(valor, campo)` → *"El nombre es obligatorio."*
+- `requerida(valor, campo)` → *"La contraseña es obligatoria."*
+
+🔑 **Son dos métodos y no un `boolean` de género** porque en la llamada
+`requerida(p, "contraseña")` se lee solo, mientras que `requerido(p,
+"contraseña", true)` deja adivinar qué significa el `true`. El primero versión
+que salió decía *"El contraseña es obligatorio"*, y la prueba de API lo cazó.
+
+- La comparación es contra `isBlank()`, **no** contra `!= null`: el formulario
+  manda `"   "` cuando el usuario deja el campo en blanco, y eso **pasa** un
+  `!= null`. El test `nombreSoloEspacios` existe por esto.
+
+#### 3. El `PUT /users/{id}` era un agujero
+
+`updateUser` hacía `user.setName(request.getName())`: sin `trim`, sin límite de
+longitud, sin formato de correo y sin chequeo de duplicados. Un nombre de 500
+caracteres o un correo con mayúsculas y espacios se guardaban tal cual.
+
+Ahora pasa por los mismos validadores que el alta, **más** una corrección que
+hacía falta: el chequeo de correo duplicado **excluye al propio usuario**
+(`filter(otro -> !otro.getId().equals(id))`). Sin ese filtro, editar a alguien
+sin tocarle el correo siempre daría conflicto y sería **imposible editar a un
+usuario**.
+
+#### 4. SKU y barcode: de opcionales a obligatorios
+
+Dos razones, ambas de operación:
+
+1. En el POS el producto se cobra **escaneando** su código. Un producto sin
+   barcode es un producto que el cajero no puede cobrar sin buscarlo a mano.
+2. En PostgreSQL un `UNIQUE` admite **varios `NULL`** (`NULL != NULL`). Con el
+   barcode opcional, "producto sin código" se acumulaba **en silencio**: no
+   decía nada, no rompía nada y no se podía ni contar. El índice único no
+   avisaba porque técnicamente no había duplicado.
+
+#### 5. La migración rellena antes de restringir (y por qué no puede ser simple)
+
+Un `NOT NULL` a secas **falla** si hay datos sucios. Y "sucio" tiene **tres**
+formas, cada una por un lado distinto:
+
+| Forma | Qué es | Por qué la atrapa |
+|---|---|---|
+| `NULL` | Falta el campo en el INSERT | `IS NULL` |
+| `''` o `'   '` | El usuario dejó el campo en blanco | Para una columna `NOT NULL` son valores **válidos**: la base los acepta |
+| `'NULL'` | Se guardó la **palabra** NULL como si fuera el dato | Es una cadena normal de 4 caracteres |
+
+🔑 La tercera se encontró **revisando la base**, no leyendo el código: el
+producto "Leche 3" tenía el texto `NULL` como SKU. Para la base es un SKU
+perfectamente normal, y el `NOT NULL` lo acepta igual. Si la migración solo
+mirara `IS NULL`, el producto habría quedado guardado "sin SKU" y nadie se
+enteraría.
+
+- Los rellenos usan `WHERE ... IS NULL OR btrim()='' OR upper(btrim())='NULL'`
+  y **nunca pisan un valor que ya existe**.
+- Los valores inventados son **internos y rastreables**: SKU `PEND-SKU-<id>` y
+  barcode con **prefijo 20**, que es el rango que GS1 reserva a retail interno,
+  así que no colisiona con el EAN de fábrica (750, 789, 737...).
+- El barcode se rellena con ceros a la **izquierda** (`'20' || lpad(id,12,'0')`)
+  para que todos midan 14 dígitos: el código es un identificador de **texto** y
+  un lector de ancho fijo los leería distinto si variaran.
+- La comprobación final es un `DO $$` que **falla con un mensaje que dice qué
+  hacer**, en vez de un error técnico de PostgreSQL.
+
+#### 6. Entidad y base van de la mano
+
+`ProductEntity` pasó a `@Column(unique = true, nullable = false)`. Con
+`ddl-auto: validate`, Hibernate **no toca** el esquema: solo lo comprueba al
+arrancar. Si la entidad dice "no puede ser nulo" y la columna lo permite, la
+aplicación **no levanta**. Ese arranque fallido es la red que hace honesto
+mantener las dos cosas sincronizadas, y es la razón de no confiar solo en la
+validación de Java.
+
+#### 7. Verificación
+
+- **294/294 tests**: 15 nuevos de usuarios (`UserImplCamposObligatoriosTest`),
+  6 del validador, y **2 tests viejos invertidos** (afirmaban que SKU/barcode
+  vacío era válido).
+- **12 peticiones reales** contra la API, todas con **400** y mensaje útil:
+  categoría, rol, proveedor (nombre y RFC), usuario (nombre, correo, contraseña
+  vacía y corta) en alta y en edición, y producto (SKU y barcode vacíos).
+- El caso que **sí** debe pasar también pasó: un producto nuevo con SKU y
+  barcode válidos se creó (id 18, luego eliminado para no dejar basura).
+- Los 2 productos rellenados quedaron como `PEND-SKU-1` / `20000000000001` y
+  `PEND-SKU-14`. **Son provisionales**: el dueño debería poner los reales.
+
 ### 2026-10-04 — V6: idempotencia del cobro (un doble Enter ya no cobra dos veces)
 
 > Encargo: que apretar Enter dos veces en el modal de pago **no** genere dos
@@ -922,7 +1060,7 @@ tocar nada. Si se confirman como opcionales, no hay que rehacer este código.
 - ⚠️ **`/ping` sigue sin existir** — no usarlo como healthcheck de Railway.
 - ⚠️ **Secretos en historial de git**: purgar con `git filter-repo` antes de publicar el repo.
 - **Imágenes**: sin perfil dev/prod separado en el frontend para `environment-prod.ts` (requiere definir la API de Railway al desplegar).
-- **Tests**: **273 en verde** con '-Dtest='!ComprasApplicationTests' (repos + servicios + file storage + 12 controllers WebMvc + bootstraps + 11 pruebas de idempotencia). ComprasApplicationTests (@SpringBootTest) solo corre contra una BD real accesible.
+- **Tests**: **294 en verde** con '-Dtest='!ComprasApplicationTests' (repos + servicios + file storage + 12 controllers WebMvc + bootstraps + 11 de idempotencia + 15 de campos obligatorios + 6 del validador). `ComprasApplicationTests` (`@SpringBootTest`) solo corre contra una BD real accesible.
 - Frontend: módulos **Clientes y Facturas descartados** (permisos eliminados). `Caja` sigue como placeholder porque su "hoja de corte" vive hoy en Reportes. `reversePayment` del backend no tiene UI (requiere un listado/detalle de pagos).
 - **BD local**: el CHECK `permissions_name_check` (generado por Hibernate para `@Enumerated`) NO se actualiza con `ddl-auto:update`. Al agregar permisos al enum el arranque puede fallar con "viola la restricción check" → droppear el constraint en BD local (`ALTER TABLE permissions DROP CONSTRAINT permissions_name_check`) o usar BD nueva. Con Flyway en `validate` el CHECK lo define la migración V1 (34) — mantenerla sincronizada con `PermissionName`.
 - **Código pendiente**: falta cambiar `System.out.println` de los bootstraps por un logger. ⚠️ Al estar trabajando entre máquinas, un AGENTS.md desactualizado hizo que otra laptop recreara `pingController`; ya está eliminado de nuevo (ver sesión 2026-09-17) — no recrearlo.

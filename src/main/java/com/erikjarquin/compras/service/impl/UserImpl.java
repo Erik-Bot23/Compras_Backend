@@ -24,9 +24,22 @@ import com.erikjarquin.compras.util.InputValidator;
  *  - Un usuario no se borra físicamente: se desactiva (active=false) para
  *    conservar la integridad referencial con ventas/pagos históricos.
  *  - El email debe ser único en el sistema.
+ *  - V7 (2026-10-04): nombre, correo y contraseña son OBLIGATORIOS y se validan
+ *    en el alta **y** en la edición. Antes la edición copiaba el texto crudo y
+ *    lo único que frenaba un campo vacío era el NOT NULL de la base, que
+ *    respondía con un 409 diciendo "el dato ya existe".
  */
 @Service
 public class UserImpl implements UserService {
+    /**
+     * Longitud mínima de la contraseña al dar de alta un usuario (V7).
+     *
+     * <p>Es la misma que exigen los formularios del frontend. 🔑 Si se cambia en
+     * uno, hay que cambiarla en el otro: el backend es el que de verdad protege
+     * el dato.
+     */
+    private static final int MIN_PASSWORD_LENGTH = 8;
+
     private final UserRepository repository;
      private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
@@ -48,20 +61,37 @@ public class UserImpl implements UserService {
     //Crear usuario
     @Override
     public UserDto createUser(CreateUserRequest request){
+        // V7: primero se VALIDA y se NORMALIZA, y solo después se busca el
+        // duplicado. Antes el findByEmail usaba el correo crudo y venía antes de
+        // cualquier validación: dos consecuencias malas. Una, un correo vacío
+        // llegaba al INSERT y la base lo rechazaba con un 409 que decía "el dato
+        // ya existe", que no era lo que pasaba. Dos, el duplicado se comparaba
+        // sin normalizar, así que " Ana@X.com " no se veía duplicado de
+        // "ana@x.com" y el UNIQUE de la base saltaba después, con el mismo
+        // mensaje engañoso.
+        String emailUser = InputValidator.email(
+                InputValidator.requerido(request.getEmail(), "correo"));
+
         //El correo no debe estar ya registrado (sería violación de unique).
-        if(repository.findByEmail(request.getEmail()).isPresent()){
+        if(repository.findByEmail(emailUser).isPresent()){
             throw new UserException("El correo ya está registrado", org.springframework.http.HttpStatus.CONFLICT);
         }
 
         UserEntity user = new UserEntity();
 
-        String userName = InputValidator.texto(request.getName(), "nombre del usuario", 50);
-        String emailUser = InputValidator.email(request.getEmail());
+        String userName = InputValidator.texto(
+                InputValidator.requerido(request.getName(), "nombre"), "nombre del usuario", 50);
+
+        // V7: la contraseña ahora es obligatoria y con longitud mínima. Antes se
+        // hasheaba tal cual, y BCrypt acepta la cadena vacía: el usuario quedaba
+        // creado con una contraseña que NUNCA iba a poder usar para entrar.
+        String password = InputValidator.password(request.getPassword(), "contraseña", MIN_PASSWORD_LENGTH);
+
         user.setName(userName);
         user.setEmail(emailUser);
-        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        user.setPassword(passwordEncoder.encode(password));
 
-        RoleEntity role = roleRepository.findById(request.getRoleId()).orElseThrow(() -> 
+        RoleEntity role = roleRepository.findById(request.getRoleId()).orElseThrow(() ->
             new IllegalArgumentException("Rol no encontrado"));
         user.setRole(role);
         user.setActive(true);
@@ -81,10 +111,28 @@ public class UserImpl implements UserService {
         UserEntity user = repository.findById(id).orElseThrow(() ->
             new UserException("Usuario no encontrado"));
 
-        user.setName(request.getName());
-        user.setEmail(request.getEmail());
+        // V7: este método copiaba el texto CRUDO del request."name", "correo",
+        // un nombre de 500 caracteres o un correo con mayúsculas y espacios se
+        // guardaban tal cual, y lo único que frenaba un campo vacío era el NOT
+        // NULL de la base. Ahora pasa por los mismos validadores que el alta.
+        String userName = InputValidator.texto(
+                InputValidator.requerido(request.getName(), "nombre"), "nombre del usuario", 50);
+        String emailUser = InputValidator.email(
+                InputValidator.requerido(request.getEmail(), "correo"));
 
-        RoleEntity role = roleRepository.findById(request.getRoleId()).orElseThrow(() -> 
+        // Duplicado de correo, pero **excluyendo al propio usuario**: si no, al
+        // editar sin cambiar el correo saltaría el conflicto consigo mismo.
+        repository.findByEmail(emailUser)
+                .filter(otro -> !otro.getId().equals(id))
+                .ifPresent(otro -> {
+                    throw new UserException("El correo ya está registrado",
+                            org.springframework.http.HttpStatus.CONFLICT);
+                });
+
+        user.setName(userName);
+        user.setEmail(emailUser);
+
+        RoleEntity role = roleRepository.findById(request.getRoleId()).orElseThrow(() ->
             new IllegalArgumentException("Rol no encontrado"));
         user.setRole(role);
         UserEntity updated = repository.save(user);

@@ -65,11 +65,26 @@ class InputValidatorTest {
         }
 
         @Test
-        @DisplayName("es opcional: vacío devuelve null, no lanza")
-        void vacioEsNull(){
-            assertThat(InputValidator.sku("")).isNull();
-            assertThat(InputValidator.sku("   ")).isNull();
-            assertThat(InputValidator.sku(null)).isNull();
+        @DisplayName("es obligatorio: vacío, blancos o null lanzan (V7)")
+        void vacioLanza(){
+            // V7 (2026-10-04): esto antes devolvía null y el SKU se guardaba
+            // como NULL. Ahora es obligatorio, y el mensaje tiene que decir qué
+            // campo falta: es lo que ve el usuario en el 400.
+            assertThatThrownBy(() -> InputValidator.sku(""))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("SKU")
+                    .hasMessageContaining("obligatorio");
+
+            // "   " es el caso que un chequeo con != null no atrapa: el
+            // formulario manda la cadena vacía o con espacios cuando el usuario
+            // deja el campo en blanco.
+            assertThatThrownBy(() -> InputValidator.sku("   "))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("obligatorio");
+
+            assertThatThrownBy(() -> InputValidator.sku(null))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("obligatorio");
         }
     }
 
@@ -139,6 +154,106 @@ class InputValidatorTest {
             assertThatThrownBy(() -> InputValidator.barcode("1".repeat(21)))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("20");
+        }
+
+        @Test
+        @DisplayName("es obligatorio: vacío, blancos o null lanzan (V7)")
+        void vacioLanza(){
+            // V7: antes el código de barras vacío devolvía null y se guardaba
+            // como NULL. En el POS el producto se cobra escaneando, así que un
+            // producto sin código es un producto que el cajero no puede cobrar
+            // sin buscarlo a mano.
+            assertThatThrownBy(() -> InputValidator.barcode(""))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("código de barras")
+                    .hasMessageContaining("obligatorio");
+
+            assertThatThrownBy(() -> InputValidator.barcode("   "))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("obligatorio");
+
+            assertThatThrownBy(() -> InputValidator.barcode(null))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("obligatorio");
+        }
+    }
+
+    // =========================================================================
+    //  Obligatoriedad: requerido() y password()  (V7)
+    //
+    //  Estos dos métodos son los que evitan que un campo vacío llegue al
+    //  INSERT. Antes cada servicio escribía su propio `if (x == null) throw`
+    //  —o no lo escribía, como el de usuario— y la base de datos respondía con
+    //  un 409 diciendo "el dato ya existe".
+    // =========================================================================
+    @Nested
+    @DisplayName("Obligatoriedad (V7)")
+    class ObligatorioTest {
+
+        @Test
+        @DisplayName("requerido: devuelve el valor recortado")
+        void requeridoRecorta(){
+            assertThat(InputValidator.requerido("  Leche  ", "nombre")).isEqualTo("Leche");
+        }
+
+        @Test
+        @DisplayName("requerido: null, vacío y solo espacios lanzan")
+        void requeridoLanza(){
+            // Los TRES casos, y el último es el que se cuela en la práctica:
+            // el formulario manda "   " cuando el usuario deja el campo vacío.
+            for (String vacio : new String[]{ null, "", "   ", "\t\n" }) {
+                assertThatThrownBy(() -> InputValidator.requerido(vacio, "nombre"))
+                        .isInstanceOf(IllegalArgumentException.class)
+                        .hasMessageContaining("nombre")
+                        .hasMessageContaining("obligatorio");
+            }
+        }
+
+        @Test
+        @DisplayName("password: rechaza vacía y demasiado corta")
+        void passwordValida(){
+            assertThat(InputValidator.password("clave1234", "contraseña", 8))
+                    .isEqualTo("clave1234");
+
+            assertThatThrownBy(() -> InputValidator.password("", "contraseña", 8))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    // 🔑 El mensaje se comprueba palabra por palabra porque es lo
+                    // ÚNICO que ve el usuario. "El contraseña es obligatorio"
+                    // (el error que había) hace que el sistema parezca hecho a
+                    // prisas; "La contraseña es obligatoria" no.
+                    .hasMessage("La contraseña es obligatoria.");
+
+            assertThatThrownBy(() -> InputValidator.password("corta", "contraseña", 8))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("La contraseña")
+                    .hasMessageContaining("8");
+        }
+
+        @Test
+        @DisplayName("requerida: el género del campo se refleja en el mensaje")
+        void requeridoRespetaElGenero(){
+            // Masculino y femenino van por métodos distintos a propósito: un
+            // parámetro boolean dejaría adivinar qué significa en la llamada.
+            assertThatThrownBy(() -> InputValidator.requerido("", "nombre"))
+                    .hasMessage("El nombre es obligatorio.");
+
+            assertThatThrownBy(() -> InputValidator.requerida("", "contraseña"))
+                    .hasMessage("La contraseña es obligatoria.");
+        }
+
+        @Test
+        @DisplayName("password: una cadena vacía no se escapaba, y por qué importa")
+        void passwordVaciaNoSeEscapaba(){
+            // Este es el test que documenta el bug más caro de la tanda.
+            //
+            // BCryptPasswordEncoder.hashear("") NO lanza nada: devuelve un hash
+            // válido. Así que antes de V7, un alta de usuario con la contraseña
+            // en blanco creaba la cuenta y la fila en la base. El problema
+            // aparecía al intentar entrar: matches("", hash) devuelve false
+            // SIEMPRE, así que esa persona quedaba bloqueada para siempre y sin
+            // explicación. Por eso password() exige contenido antes de hashear.
+            assertThatThrownBy(() -> InputValidator.password("", "contraseña", 8))
+                    .isInstanceOf(IllegalArgumentException.class);
         }
     }
 

@@ -96,18 +96,27 @@ public final class InputValidator {
     }
 
     /**
-     * Valida el SKU. Opcional: si viene vacío, devuelve {@code null} (el SKU es
-     * opcional desde la sesión del 2026-09-28).
+     * Valida el SKU. <b>Obligatorio</b> (V7, 2026-10-04).
      *
-     * @throws IllegalArgumentException si trae caracteres no permitidos o excede
+     * <p><b>Cambia una decisión anterior.</b> El 2026-09-28 el SKU era
+     * <i>opcional</i>: si venía vacío devolvía {@code null} y la columna lo
+     * admitía. Se cambió a obligatorio por dos razones:
+     *
+     * <ol>
+     *   <li>Un producto sin SKU no se puede localizar ni integrar. El SKU es la
+     *       clave con la que el negocio habla del producto; si falta, el
+     *       inventario tiene un agujero.</li>
+     *   <li>En PostgreSQL un {@code UNIQUE} admite <b>varios NULL</b>: con el
+     *       SKU opcional se acumulaban productos sin SKU sin que nada lo
+     *       indicara, y un producto nuevo heredaba esa ambigüedad.</li>
+     * </ol>
+     *
+     * @throws IllegalArgumentException si viene vacío, si trae caracteres no
+     *                                  permitidos o si excede
      *                                  {@link #MAX_SKU_LENGTH}
      */
     public static String sku(String valor){
-        String codigo = normalizarCodigo(valor);
-
-        if(codigo == null || codigo.isEmpty()){
-            return null;
-        }
+        String codigo = requerido(normalizarCodigo(valor), "SKU");
 
         if(codigo.length() > MAX_SKU_LENGTH){
             throw new IllegalArgumentException(
@@ -152,18 +161,23 @@ public final class InputValidator {
     }
 
     /**
-     * Valida el código de barras. Opcional.
+     * Valida el código de barras. <b>Obligatorio</b> (V7, 2026-10-04).
      *
-     * Solo dígitos, máximo {@link #MAX_BARCODE_LENGTH}, y texto: es un
-     * identificador, y por eso no se convierte a número (perdería los ceros a la
-     * izquierda y rompería el lector).
+     * <p>Cambia la decisión del 2026-09-28, cuando era opcional. El motivo es
+     * operativo: en el POS el producto se cobra escaneando su código, así que un
+     * producto sin código es un producto que el cajero no puede cobrar sin
+     * buscarlo a mano. Y como en el SKU, un {@code UNIQUE} admite varios NULL,
+     * de modo que "sin código" se acumulaba en silencio.
+     *
+     * <p>Solo dígitos, máximo {@link #MAX_BARCODE_LENGTH}, y se guarda como
+     * <b>texto</b>: es un identificador, y por eso no se convierte a número
+     * (perdería los ceros a la izquierda y rompería el lector).
+     *
+     * @throws IllegalArgumentException si viene vacío, si trae letras o si
+     *                                  excede {@link #MAX_BARCODE_LENGTH}
      */
     public static String barcode(String valor){
-        String codigo = normalizarCodigo(valor);
-
-        if(codigo == null || codigo.isEmpty()){
-            return null;
-        }
+        String codigo = requerido(normalizarCodigo(valor), "código de barras");
 
         if(!BARCODE_PATTERN.matcher(codigo).matches()){
             throw new IllegalArgumentException(
@@ -329,9 +343,15 @@ public final class InputValidator {
     }
 
     /**
-     *Texto libre con límite, sin saltos de línea.
-     *Para nombre de categoría y de rol: un "Bebidas\nRicas" descoloca la fila
-    */
+     * Texto libre con límite, sin saltos de línea.
+     * Para nombre de categoría y de rol: un "Bebidas\nRicas" descoloca la fila
+     *
+     * <p><b>OJO: este NO exige que el texto exista.</b> Si viene vacío devuelve
+     * {@code null}, y quien lo use TIENE que comprobarlo aparte. Es la razón de
+     * que existiera {@link #requerido}: tres servicios (categoría, rol y
+     * proveedor) acaban de escribir su propio {@code if (x == null) throw}, y
+     * el de usuario se olvidó, que es exactamente el bug que se corrigió en V7.
+     */
    public static String texto(String valor, String campo, int max){
     String limpio = valor == null ? null : valor.trim();
 
@@ -347,6 +367,101 @@ public final class InputValidator {
 
     return limpio.toUpperCase();
    }
+
+    // =========================================================================
+    // Obligatoriedad (V7, 2026-10-04)
+    //
+    //  Los métodos de arriba validan el FORMATO de algo que ya existe. Faltaba
+    //  el que responde "¿viene algo?". Sin él, cada servicio se inventaba su
+    //  propio chequeo, y el resultado era desigual: categoría, rol y proveedor
+    //  rechazaban el nombre vacío, pero el de usuario se lo pasaba a la base de
+    //  datos, que respondía con un 409 diciendo "el dato ya existe".
+    // =========================================================================
+
+    /**
+     * Exige que el campo venga con contenido y lo devuelve recortado.
+     *
+     * <p>Un "campo obligatorio" que se cumple solo con {@code != null} no sirve:
+     * el formulario manda {@code ""} o cinco espacios cuando el usuario lo
+     * dejó en blanco, y eso <b>pasa</b> el chequeo. Por eso la comparación es
+     * contra {@code isBlank()}, que cubre las tres formas de "vacío".
+     *
+     * <p>El mensaje dice QUÉ campo está mal y no "validation failed", que es la
+     * razón de que esta clase exista en vez de anotaciones de Bean Validation
+     * (ver el comentario de la cabecera de la clase).
+     *
+     * <p>Para campos <b>femeninos</b> usa {@link #requerida}, que dice "La
+     * contraseña es obligatoria" en vez de "El contraseña es obligatorio".
+     *
+     * @param valor  lo que viene del cliente
+     * @param campo  cómo se le llama al campo en la respuesta, p. ej. "nombre de
+     *               la categoría" (con artículo, para que el mensaje se lea)
+     * @return el valor recortado, listo para guardarse
+     * @throws IllegalArgumentException si viene {@code null}, vacío o solo
+     *                                  espacios
+     */
+    public static String requerido(String valor, String campo){
+        return exigir(valor, campo, "El", "obligatorio");
+    }
+
+    /**
+     * Igual que {@link #requerido}, pero para campos femeninos.
+     *
+     * <p>Existe como método aparte y no como un parámetro {@code boolean} porque
+     * en la llamada {@link #requerida}(p, "contraseña") se lee solo, mientras
+     * que {@code requerido(p, "contraseña", true)} deja adivinar qué significa
+     * ese {@code true}. El mensaje es lo que ve el usuario final, y "La
+     * contraseña es obligatoria" es la diferencia entre que parezca un sistema
+     * cuidado y uno hecho a prisas.
+     */
+    public static String requerida(String valor, String campo){
+        return exigir(valor, campo, "La", "obligatoria");
+    }
+
+    /** Núcleo de los dos de arriba: el único que decide si falta. */
+    private static String exigir(String valor, String campo, String articulo, String terminacion){
+        String limpio = valor == null ? null : valor.trim();
+
+        if (limpio == null || limpio.isEmpty()) {
+            throw new IllegalArgumentException(articulo + " " + campo + " es " + terminacion + ".");
+        }
+
+        return limpio;
+    }
+
+    /**
+     * Exige que la contraseña venga y tenga una longitud mínima.
+     *
+     * <p><b>Por qué esto importa más de lo que parece.</b> Sin este método, una
+     * contraseña vacía <b>sí se guardaba</b>: {@code BCryptPasswordEncoder}
+     * hashea la cadena vacía sin quejarse, así que el usuario quedaba creado y
+     * con una fila en la base de datos. El problema aparecía después, al
+     * iniciar sesión: {@code matches} devuelve {@code false} ante una contraseña
+     * vacía, siempre, así que esa persona quedaba <b>bloqueada para siempre</b>
+     * sin que nadie supiera por qué. Un dato basura en la base y un soporte que
+     * no tiene explicación.
+     *
+     * <p>La longitud mínima es de 8 porque es la que ya exigen los formularios
+     * del frontend (login, reset y perfil). 🔑 Si algún día se cambia ahí, hay que
+     * cambiarla aquí también: el backend es el que de verdad protege el dato, y
+     * si estas dos reglas se separan alguien siempre se olvida de una.
+     *
+     * @param valor  la contraseña en texto plano (se hashea después)
+     * @param campo  nombre del campo para el mensaje
+     * @param min    longitud mínima
+     * @return la contraseña tal cual, para que el llamador la hashee
+     * @throws IllegalArgumentException si viene vacía o es demasiado corta
+     */
+    public static String password(String valor, String campo, int min){
+        String limpia = requerida(valor, campo);
+
+        if (limpia.length() < min) {
+            throw new IllegalArgumentException(
+                "La " + campo + " debe tener al menos " + min + " caracteres.");
+        }
+
+        return limpia;
+    }
 
    /** 
     * Teléfono: dígitos, espacios, guiones, paréntesis y más.
