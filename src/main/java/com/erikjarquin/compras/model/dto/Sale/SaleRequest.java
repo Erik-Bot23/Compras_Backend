@@ -12,6 +12,20 @@ public class SaleRequest {
     private List<SaleItemRequest> items;
     private CardPaymentRequest cardPayment; //Pago con tarjeta
 
+    /**
+     * Clave de idempotencia del intento de cobro (V6).
+     *
+     * <p>La genera el cliente (un UUID) y la repite en cada reintento del mismo
+     * cobro. Si el backend ya tiene una venta con esta clave, devuelve esa en
+     * vez de crear otra.
+     *
+     * <p><b>Opcional a propósito.</b> Si fuera obligatoria, cualquier cliente
+     * viejo (o una prueba) sin la clave empezaría a recibir 400. Con ella
+     * opcional, el que no la manda sigue funcionando como siempre y solo quien
+     * la manda queda protegido. El frontend del POS sí la manda siempre.
+     */
+    private String idempotencyKey;
+
     public SaleRequest(){}
 
     //Getter y setter de paymentMethod
@@ -48,5 +62,14 @@ public class SaleRequest {
 
     public void setCardPayment(CardPaymentRequest cardPayment){
         this.cardPayment=cardPayment;
+    }
+
+    //Getter y setter de idempotencyKey (V6)
+    public String getIdempotencyKey(){
+        return idempotencyKey;
+    }
+
+    public void setIdempotencyKey(String idempotencyKey){
+        this.idempotencyKey=idempotencyKey;
     }
 }

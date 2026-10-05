@@ -22,6 +22,15 @@ public class SaleDetailHistoryResponse {
     private boolean cancelled;
     private LocalDateTime cancelledAt;
 
+    /**
+     * Usuario que registro la venta (V5).
+     *
+     * <p>NULL en las ventas anteriores a V5: el dato no se guardaba y no se
+     * inventa. El frontend lo muestra como "sin usuario" en vez de "-".
+     */
+    private Long userId;
+    private String userName;
+
     //Getter y setter de saleId
     public Long getSaleId(){
         return saleId;
@@ -107,4 +116,22 @@ public class SaleDetailHistoryResponse {
     public void setCancelledAt(LocalDateTime cancelledAt){
         this.cancelledAt = cancelledAt;
     }
+
+    //Getter y setter de user (V5)
+    public Long getUserId(){
+        return userId;
+    }
+
+    public void setUserId(Long userId){
+        this.userId=userId;
+    }
+
+    public String getUserName(){
+        return userName;
+    }
+
+    public void setUserName(String userName){
+        this.userName=userName;
+    }
+
 }

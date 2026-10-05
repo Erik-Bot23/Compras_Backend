@@ -6,6 +6,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.List;
 
 import org.springframework.data.domain.PageRequest;
@@ -16,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.erikjarquin.compras.exceptions.ReportException;
 import com.erikjarquin.compras.mapper.ReportsMapper;
 import com.erikjarquin.compras.mapper.SaleMapper;
+import com.erikjarquin.compras.model.dto.Reports.CashBoxReportDTO;
 import com.erikjarquin.compras.model.dto.Reports.CashReportDTO;
 import com.erikjarquin.compras.model.dto.Reports.CategoryPerformanceDTO;
 import com.erikjarquin.compras.model.dto.Reports.LowStockDTO;
@@ -25,12 +28,15 @@ import com.erikjarquin.compras.model.dto.Reports.PeriodSalesDTO;
 import com.erikjarquin.compras.model.dto.Reports.ProfitDTO;
 import com.erikjarquin.compras.model.dto.Reports.ReportsSummaryDTO;
 import com.erikjarquin.compras.model.dto.Reports.TopProductDTO;
+import com.erikjarquin.compras.model.entity.CashBoxEntity;
 import com.erikjarquin.compras.model.entity.CashRegisterEntity;
 import com.erikjarquin.compras.model.entity.SaleDetailEntity;
 import com.erikjarquin.compras.model.entity.SaleEntity;
+import com.erikjarquin.compras.model.entity.UserEntity;
 import com.erikjarquin.compras.model.enums.PaymentMethod;
 import com.erikjarquin.compras.model.enums.PaymentStatus;
 import com.erikjarquin.compras.model.enums.ReportGroup;
+import com.erikjarquin.compras.repository.CashBoxRepository;
 import com.erikjarquin.compras.repository.CashRegisterRepository;
 import com.erikjarquin.compras.repository.ProductRepository;
 import com.erikjarquin.compras.repository.SaleRepository;
@@ -57,16 +63,19 @@ public class ReportsImpl implements ReportsService {
     private final SaleRepository saleRepository;
     private final ProductRepository productRepository;
     private final CashRegisterRepository cashRegisterRepository;
+    private final CashBoxRepository cashBoxRepository;
     private final SaleMapper saleMapper;
 
     public ReportsImpl(
             SaleRepository saleRepository,
             ProductRepository productRepository,
             CashRegisterRepository cashRegisterRepository,
+            CashBoxRepository cashBoxRepository,
             SaleMapper saleMapper){
         this.saleRepository = saleRepository;
         this.productRepository = productRepository;
         this.cashRegisterRepository = cashRegisterRepository;
+        this.cashBoxRepository = cashBoxRepository;
         this.saleMapper = saleMapper;
     }
 
@@ -324,6 +333,197 @@ public class ReportsImpl implements ReportsService {
         dto.setGrossProfit(totalSales.subtract(cogs).setScale(2, RoundingMode.HALF_UP));
         dto.setActive(Boolean.TRUE.equals(cash.getActive()));
         dto.setSales(sales.stream().map(saleMapper::toDetailResponse).toList());
+
+        return dto;
+    }
+
+    // =========================================================================
+    //  Reporte de CAJA con sus SESIONES (V5)
+    // =========================================================================
+
+    /**
+     * Devuelve una caja física con todos sus turnos, filtrables por fecha y por
+     * usuario.
+     *
+     * <p><b>Por qué el filtro se aplica en Java y no en SQL.</b> Una caja tiene
+     * pocos turnos (dos o tres cajas, un turno diario cada una), así que el
+     * conjunto es chico y se puede filtrar en memoria sin penalizar. A cambio,
+     * una sola pasada de código calcula ventas, por-usuario, utilidad y el
+     * agrupado por vendedor. Hacerlo en SQL serían cuatro consultas
+     * distintas y luego reconciliarlas en Java, que es justo donde se
+     * esconden los bugs.
+     *
+     * <p><b>El filtro de usuario se hace sobre {@code sale.getUser()}</b>, que
+     * es LAZY. Por eso el método es {@code @Transactional}: dentro de la
+     * transacción la sesión de JPA está abierta y el proxy se resuelve. Fuera de
+     * ella saltaría una {@code LazyInitializationException}.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public CashBoxReportDTO getCashBoxReport(Long boxId, LocalDate from, LocalDate to, Long userId){
+        CashBoxEntity box = cashBoxRepository.findById(boxId)
+                .orElseThrow(() -> new ReportException(
+                    "No existe la caja indicada", HttpStatus.NOT_FOUND));
+
+        List<CashRegisterEntity> sesiones =
+                cashRegisterRepository.findByCashBoxIdOrderByOpenedAtDesc(boxId);
+
+        boolean filtrado = from != null || to != null || userId != null;
+
+        LocalDate start = from;
+        //El filtro de fecha se aplica sobre openedAt (inicio del turno) y no sobre
+        //closedAt: un turno abierto a las 11pm y cerrado a las 2am cae en el dia
+        //que se ABRIO, que es como el cajero lo recuerda.
+        LocalDate fin = to == null ? null : to.plusDays(1);
+
+        List<CashBoxReportDTO.CashBoxSessionDTO> dtos = new ArrayList<>();
+
+        for(CashRegisterEntity sesion : sesiones){
+            if(sesion.getOpenedAt() == null){
+                continue;
+            }
+
+            LocalDate dia = sesion.getOpenedAt().toLocalDate();
+
+            if(start != null && dia.isBefore(start)){
+                continue;
+            }
+            if(fin != null && !dia.isBefore(fin)){
+                continue;
+            }
+
+            List<SaleEntity> ventas = saleRepository.findByCashRegister(sesion);
+
+            //Ventas que pasan el filtro de usuario. Sin userId el filtro no
+            //aplica y se usan todas (incluidas las de usuario null).
+            List<SaleEntity> filtradas = userId == null
+                    ? ventas
+                    : ventas.stream()
+                        .filter(v -> v.getUser() != null
+                                && userId.equals(v.getUser().getId()))
+                        .toList();
+
+            //Con filtros, un turno sin ventas que los cumplan no se muestra:
+            //una fila de ceros confunde ("este turno no vendió nada" es muy
+            //distinto de "este turno no aparece porque Juan no trabajó ahí").
+            if(filtrado && filtradas.isEmpty()){
+                continue;
+            }
+
+            dtos.add(buildSessionDto(sesion, filtradas, filtrado));
+        }
+
+        CashBoxReportDTO dto = new CashBoxReportDTO();
+        dto.setBoxId(box.getId());
+        dto.setNumber(box.getNumber());
+        dto.setDescription(box.getDescription());
+        dto.setActive(box.isActive());
+        dto.setSessions(dtos);
+        dto.setTotalSessions(sesiones.size());
+
+        return dto;
+    }
+
+    /**
+     * Un turno del reporte: sus montos salen de las ventas YA filtradas.
+     *
+     * <p>Se calcula por sesión en vez de reutilizar {@code getCashReport} porque
+     * aquí los montos dependen del filtro, y ahí siempre son los del turno
+     * completo. Reusarlo mezclaría ambos mundos y daría totales que no
+     * corresponden a lo que el usuario está viendo.
+     */
+    private CashBoxReportDTO.CashBoxSessionDTO buildSessionDto(
+            CashRegisterEntity sesion, List<SaleEntity> ventas, boolean filtrado){
+
+        BigDecimal efectivo = BigDecimal.ZERO;
+        BigDecimal debito = BigDecimal.ZERO;
+        BigDecimal credito = BigDecimal.ZERO;
+        BigDecimal costo = BigDecimal.ZERO;
+
+        //Agrupacion por vendedor: el filtro "quien vendio" necesita responder
+        //"cuanto vendio cada quien", y eso sale de agrupar, no de leer la tabla.
+        Map<Long, CashBoxReportDTO.CashSessionSellerDTO> porUsuario = new LinkedHashMap<>();
+        BigDecimal sinUsuario = BigDecimal.ZERO;
+        long sinUsuarioTickets = 0;
+
+        for(SaleEntity venta : ventas){
+            switch(venta.getPaymentMethod()){
+                case CASH -> efectivo = efectivo.add(venta.getTotal());
+                case DEBIT -> debito = debito.add(venta.getTotal());
+                case CREDIT -> credito = credito.add(venta.getTotal());
+            }
+
+            for(SaleDetailEntity detalle : venta.getDetails() == null ? List.<SaleDetailEntity>of() : venta.getDetails()){
+                if(detalle.getUnitCost() == null || detalle.getQuantity() == null){
+                    continue;
+                }
+                costo = costo.add(detalle.getUnitCost()
+                        .multiply(BigDecimal.valueOf(detalle.getQuantity())));
+            }
+
+            UserEntity usuario = venta.getUser();
+            if(usuario == null){
+                //Venta anterior a V5: no tiene dueño. Se agrupa aparte en vez de
+                //inventar un "Desconocido" que parecería un usuario real.
+                sinUsuario = sinUsuario.add(venta.getTotal());
+                sinUsuarioTickets++;
+            }else{
+                CashBoxReportDTO.CashSessionSellerDTO vendedor =
+                        porUsuario.computeIfAbsent(usuario.getId(),
+                                id -> new CashBoxReportDTO.CashSessionSellerDTO(id, usuario.getName()));
+
+                vendedor.setTickets(vendedor.getTickets() + 1);
+                vendedor.setTotal(vendedor.getTotal().add(venta.getTotal()));
+            }
+        }
+
+        List<CashBoxReportDTO.CashSessionSellerDTO> vendedores =
+                new ArrayList<>(porUsuario.values());
+
+        if(sinUsuarioTickets > 0){
+            vendedores.add(new CashBoxReportDTO.CashSessionSellerDTO(
+                    null, "Sin usuario (ventas anteriores a V5)"));
+            //El agrupado real se hizo arriba; aquí solo se arma el DTO.
+            CashBoxReportDTO.CashSessionSellerDTO sinUsuarioDto =
+                    vendedores.get(vendedores.size() - 1);
+            sinUsuarioDto.setTickets(sinUsuarioTickets);
+            sinUsuarioDto.setTotal(sinUsuario);
+        }
+
+        BigDecimal total = efectivo.add(debito).add(credito);
+        BigDecimal fondo = sesion.getOpeningAmount() == null
+                ? BigDecimal.ZERO : sesion.getOpeningAmount();
+
+        CashBoxReportDTO.CashBoxSessionDTO dto = new CashBoxReportDTO.CashBoxSessionDTO();
+        dto.setSessionId(sesion.getId());
+        dto.setNumber(sesion.getNumber());
+        dto.setOpenedAt(sesion.getOpenedAt());
+        dto.setClosedAt(sesion.getClosedAt());
+        dto.setActive(Boolean.TRUE.equals(sesion.getActive()));
+        dto.setOpeningAmount(fondo.setScale(2, RoundingMode.HALF_UP));
+        dto.setClosingAmount(sesion.getCountedAmount());
+        dto.setCashSales(efectivo.setScale(2, RoundingMode.HALF_UP));
+        dto.setDebitSales(debito.setScale(2, RoundingMode.HALF_UP));
+        dto.setCreditSales(credito.setScale(2, RoundingMode.HALF_UP));
+        dto.setTotalSales(total.setScale(2, RoundingMode.HALF_UP));
+        dto.setExpectedAmount(fondo.add(efectivo).setScale(2, RoundingMode.HALF_UP));
+        dto.setTotalTickets(ventas.size());
+        dto.setGrossProfit(total.subtract(costo).setScale(2, RoundingMode.HALF_UP));
+        dto.setSellers(vendedores);
+        dto.setSales(ventas.stream().map(saleMapper::toDetailResponse).toList());
+        dto.setFiltrado(filtrado);
+
+        //La diferencia (y su motivo) son un dato CONGELADO del cierre. Con
+        //filtros activos, comparar esa diferencia contra un total filtrado
+        //daria un descuadre inventado. Por eso se manda null y la UI oculta la
+        //columna usando el flag 'filtrado'.
+        if(filtrado){
+            dto.setDifference(null);
+            dto.setDifferenceReason(null);
+        }else{
+            dto.setDifference(sesion.getDifference());
+            dto.setDifferenceReason(sesion.getDifferenceReason());
+        }
 
         return dto;
     }

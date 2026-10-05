@@ -1,5 +1,7 @@
 package com.erikjarquin.compras.model.dto.User;
 
+import java.time.LocalDateTime;
+
 public class UserDto {
     private Long id;
     private String name;
@@ -7,6 +9,22 @@ public class UserDto {
     private Long roleId;
     private String roleName;
     private boolean active;
+
+    /**
+     * Última vez que se dio de alta (V5).
+     *
+     * <p>Nunca es null en un usuario creado después de V5. En los anteriores
+     * puede venir null: el dato no se guardaba.
+     */
+    private LocalDateTime activatedAt;
+
+    /**
+     * Última vez que se dio de baja (V5).
+     *
+     * <p>Solo viene informado si {@code active == false}. Es lo que permite
+     * filtrar la tabla de usuarios dados de baja por rango de fechas.
+     */
+    private LocalDateTime deactivatedAt;
 
     //Getter y setter de id
     public Long getId(){
@@ -59,5 +77,23 @@ public class UserDto {
 
     public void setActive(boolean active){
         this.active=active;
+    }
+
+    //Getter y setter de activatedAt (V5)
+    public LocalDateTime getActivatedAt(){
+        return activatedAt;
+    }
+
+    public void setActivatedAt(LocalDateTime activatedAt){
+        this.activatedAt=activatedAt;
+    }
+
+    //Getter y setter de deactivatedAt (V5)
+    public LocalDateTime getDeactivatedAt(){
+        return deactivatedAt;
+    }
+
+    public void setDeactivatedAt(LocalDateTime deactivatedAt){
+        this.deactivatedAt=deactivatedAt;
     }
 }

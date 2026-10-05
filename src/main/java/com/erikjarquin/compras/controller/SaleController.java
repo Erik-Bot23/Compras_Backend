@@ -2,6 +2,7 @@ package com.erikjarquin.compras.controller;
 
 import java.util.List;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,6 +18,8 @@ import com.erikjarquin.compras.model.dto.Sale.SaleHistoryResponse;
 import com.erikjarquin.compras.model.dto.Sale.SaleRequest;
 import com.erikjarquin.compras.model.dto.Sale.SaleResponse;
 import com.erikjarquin.compras.service.SaleService;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Ventas: registrar una venta (efectivo o tarjeta), consultar el historial y
@@ -35,6 +38,7 @@ import com.erikjarquin.compras.service.SaleService;
  * CORS global en SecurityConfig (${CORS_ALLOWED_ORIGINS}), sin
  * {@code @CrossOrigin} aquí.
  */
+@Slf4j
 @RestController
 @RequestMapping("/api/local/sales")
 public class SaleController {
@@ -48,8 +52,39 @@ public class SaleController {
     @PreAuthorize("hasAuthority('CREAR_VENTAS')")
     @PostMapping
     public ResponseEntity<SaleResponse> processSale(@RequestBody SaleRequest request){
-        SaleResponse response = service.processSale(request);
-        return ResponseEntity.ok(response);
+        try {
+            SaleResponse response = service.processSale(request);
+            return ResponseEntity.ok(response);
+        }
+        catch(DataIntegrityViolationException e){
+            /*====== IDEMPOTENCIA (V6): DOS PETICIONES DEL MISMO COBRO A LA VEZ ======
+
+              Este es el ÚNICO caso que la comprobación previa de SaleImpl no
+              puede cubrir, y es importante entender por qué.
+
+              `processSale` primero busca la clave y, si no la encuentra, inserta.
+              El problema: si las dos peticiones llegan juntas, las dos buscan,
+              las dos no encuentran nada, y las dos intentan insertar. El índice
+              UNIQUE hace su trabajo y a una la rechaza...
+
+              ...pero aquí está el detalle no obvio que hace que esto funcione:
+              en PostgreSQL, el INSERT perdedor se BLOQUEA dentro del índice hasta
+              que la transacción ganadora resuelve. El error de clave duplicada
+              solo se emite cuando la ganadora ya hizo COMMIT. Por eso la venta
+              que buscamos aquí YA EXISTE y es visible: no hay carrera al
+              releerla.
+
+              Sin este catch, el perdedor devolvería 500 y el cajero vería un
+              error aunque su venta estuviera cobrada y registrada.
+            */
+            String clave = request.getIdempotencyKey();
+            log.warn("Intento de cobro duplicado detectado (carrera simultanea). "
+                    + "Se devuelve la venta ya registrada.");
+
+            return service.findByIdempotencyKey(clave)
+                    .map(ResponseEntity::ok)
+                    .orElseThrow(() -> e);
+        }
     }
 
     //Ver los detalles de la venta

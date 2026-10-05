@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -23,13 +24,19 @@ import com.erikjarquin.compras.model.entity.CashRegisterEntity;
 import com.erikjarquin.compras.model.entity.ProductEntity;
 import com.erikjarquin.compras.model.entity.SaleDetailEntity;
 import com.erikjarquin.compras.model.entity.SaleEntity;
+import com.erikjarquin.compras.model.entity.UserEntity;
 import com.erikjarquin.compras.model.enums.PaymentMethod;
 import com.erikjarquin.compras.model.enums.PaymentStatus;
 import com.erikjarquin.compras.repository.CashRegisterRepository;
 import com.erikjarquin.compras.repository.ProductRepository;
 import com.erikjarquin.compras.repository.SaleRepository;
+import com.erikjarquin.compras.repository.UserRepository;
 import com.erikjarquin.compras.service.PaymentService;
 import com.erikjarquin.compras.service.SaleService;
+
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -54,6 +61,7 @@ public class SaleImpl implements SaleService {
     private final ProductRepository productRepository;
     private final SaleRepository saleRepository;
     private final CashRegisterRepository cashRepository;
+    private final UserRepository userRepository;
     private final SaleMapper mapper;
     private final PaymentService paymentService;
 
@@ -61,12 +69,14 @@ public class SaleImpl implements SaleService {
         ProductRepository productRepository,
         SaleRepository saleRepository,
         CashRegisterRepository cashRepository,
+        UserRepository userRepository,
         SaleMapper mapper,
         PaymentService paymentService
     ){
         this.productRepository = productRepository;
         this.saleRepository = saleRepository;
         this.cashRepository = cashRepository;
+        this.userRepository = userRepository;
         this.mapper = mapper;
         this.paymentService=paymentService;
     }
@@ -75,6 +85,16 @@ public class SaleImpl implements SaleService {
     @Transactional(rollbackFor = Exception.class) //
     public SaleResponse processSale(SaleRequest request){
         log.info("Iniciando proceso de venta. Método de pago: {}", request.getPaymentMethod());
+
+        /*IDEMPOTENCIA (V6): si esta clave de cobro ya se procesó, se devuelve
+          la venta que se hizo en su lugar. Es lo que evita que un doble Enter
+          en el modal de pago cobre dos veces.*/
+        SaleEntity ventaPrevia = buscarVentaPorClave(request.getIdempotencyKey());
+        if(ventaPrevia != null){
+            log.info("Venta {} ya procesada con la clave de idempotencia. Se devuelve sin cobrar de nuevo.",
+                    ventaPrevia.getId());
+            return mapper.toResponse(ventaPrevia);
+        }
 
         /*VALIDACIONES INICIALES*/
         validateRequest(request);
@@ -167,7 +187,121 @@ public class SaleImpl implements SaleService {
         sale.setPaymentMethod(request.getPaymentMethod());
         sale.setCashRegister(cash);
         sale.setPaymentStatus(PaymentStatus.PENDING);
+        sale.setUser(currentUserOrNull());
+        //La clave de idempotencia viaja del cliente (V6). Sin ella la venta se
+        //crea normal: es opcional a propósito, para no romper clientes viejos.
+        sale.setIdempotencyKey(normalizarClave(request.getIdempotencyKey()));
         return sale;
+    }
+
+    /**
+     * Busca una venta ya creada con esta clave de idempotencia (V6).
+     *
+     * <p>Devuelve {@code null} si la clave viene vacía o no existe, que es el
+     * caso normal de una venta nueva.
+     *
+     * <p><b>Por qué el método NO lleva {@code @Transactional}:</b> la anotación
+     * de la clase ya abre una transacción, y aquí solo hace falta una lectura
+     * para decidir. Declararlo además sería redundante.
+     */
+    private SaleEntity buscarVentaPorClave(String clave){
+        String limpia = normalizarClave(clave);
+
+        if(limpia == null){
+            return null;
+        }
+
+        return saleRepository.findByIdempotencyKey(limpia).orElse(null);
+    }
+
+    /**
+     * Venta ya registrada con esa clave, para la red de seguridad del
+     * controlador (V6).
+     *
+     * <p>Se declara {@code @Transactional(readOnly = true)} a PROPÓSITO, y es un
+     * detalle importante: esta lectura se hace desde el
+     * {@code @CatchAndRecoverStyle} del controlador, es decir, <b>después</b> de
+     * que la transacción de la venta perdedora ya revirtió. Abrir aquí una
+     * transacción nueva es lo que permite que la lectura sea válida: leer en la
+     * transacción ya marcada como rollback-only lanzaría
+     * {@code UnexpectedRollbackException}.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<SaleResponse> findByIdempotencyKey(String idempotencyKey){
+        SaleEntity venta = buscarVentaPorClave(idempotencyKey);
+
+        return Optional.ofNullable(venta).map(mapper::toResponse);
+    }
+
+    /**
+     * Normaliza la clave de idempotencia (V6).
+     *
+     * <p>Devuelve {@code null} si no viene o viene en blanco, para que la
+     * consulta no busque por una cadena vacía (que colisionaría con todas las
+     * ventas que tampoco la tienen).
+     *
+     * <p>Se recorta porque un salto de espacio de más convertiría la misma
+     * intención de cobro en dos claves distintas, que es justo lo que la
+     * idempotencia debe evitar.
+     */
+    private String normalizarClave(String clave){
+        if(clave == null || clave.isBlank()){
+            return null;
+        }
+
+        String limpia = clave.trim();
+
+        //Cota de seguridad: si el cliente manda algo enorme, no tiene sentido
+        //guardarlo. 64 es el VARCHAR(64) de la columna.
+        return limpia.length() > 64 ? limpia.substring(0, 64) : limpia;
+    }
+
+    /**
+     * Usuario autenticado que está haciendo la venta (V5).
+     *
+     * <p>Se lee del {@code SecurityContext}, que es donde Spring Security deja
+     * al usuario del JWT ya validado. No se pasa por parámetro ni se pide el
+     * email en el body: si el cliente pudiera mandar el usuario, cualquiera que
+     * tenga un token podría registrar ventas a nombre de otro.
+     *
+     * <p><b>El principal es un {@code UserEntity}, no un {@code UserDetails}.</b>
+     * Eso lo define {@code JwtFilter}, que autentica así:
+     * {@code new UsernamePasswordAuthenticationToken(user, null, autoridades)}
+     * con la entidad {@code UserEntity} completa (rol y permisos incluidos). Por
+     * eso aquí se lee el principal <b>como entidad</b> y no se busca al usuario en
+     * la base: ya está cargado, y volver a consultarlo sería un SELECT
+     * por venta.
+     *
+     * <p>Si no hay usuario autenticado devuelve {@code null} en vez de fallar.
+     * Esto lo hace seguro para los tests de integración (que no levantan el
+     * filtro de seguridad) y para una eventual llamada interna. El costo es que
+     * una venta sin usuario queda con {@code user_id} nulo, que es exactamente
+     * el mismo estado que tienen las ventas anteriores a V5.
+     */
+    private UserEntity currentUserOrNull(){
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+
+        if(auth == null || !auth.isAuthenticated()){
+            return null;
+        }
+
+        Object principal = auth.getPrincipal();
+
+        // Spring pone "anonymousUser" (un String) cuando no hay token: no es un
+        // usuario real y no debe buscarse.
+        if(principal instanceof UserEntity user){
+            return user;
+        }
+
+        //Respaldo por si algún día el filtro cambia a un UserDetails (por
+        // ejemplo al migrar a Spring Security con un AuthenticationProvider). Con
+        // esta rama el servicio sigue funcionando sin tocarlo.
+        if(principal instanceof UserDetails details){
+            return userRepository.findByEmail(details.getUsername()).orElse(null);
+        }
+
+        return null;
     }
 
     //Procesar pago con tarjeta

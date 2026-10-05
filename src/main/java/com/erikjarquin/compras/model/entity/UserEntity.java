@@ -44,6 +44,28 @@ public class UserEntity {
     @Column(nullable = false)
     private boolean active = true;
 
+    /**
+     * Última vez que el usuario se dio de alta (V5).
+     *
+     * <p>Se informa en la creación y en cada re-activación. Junto con
+     * {@code active} responde "¿desde cuándo es parte del equipo?".
+     */
+    @Column(name = "activated_at")
+    private LocalDateTime activatedAt;
+
+    /**
+     * Última vez que el usuario se dio de baja (V5).
+     *
+     * <p>Solo se informa si {@code active == false}. Es lo que hace posible
+     * buscar el registro de una persona por el rango de fechas en que se fue,
+     * algo que con el booleano `active` solo no se podía contestar.
+     *
+     * <p>Es la <b>última</b> baja, no un historial: para tener cada cambio
+     * haría falta una tabla de auditoría, que no existe (y no hace falta aquí).
+     */
+    @Column(name = "deactivated_at")
+    private LocalDateTime deactivatedAt;
+
     @Column(name = "reset_token")
     private String resetToken;
 
@@ -102,6 +124,24 @@ public class UserEntity {
 
     public void setActive(boolean active){
         this.active=active;
+    }
+
+    //Getter y setter de activatedAt (V5)
+    public LocalDateTime getActivatedAt(){
+        return activatedAt;
+    }
+
+    public void setActivatedAt(LocalDateTime activatedAt){
+        this.activatedAt=activatedAt;
+    }
+
+    //Getter y setter de deactivatedAt (V5)
+    public LocalDateTime getDeactivatedAt(){
+        return deactivatedAt;
+    }
+
+    public void setDeactivatedAt(LocalDateTime deactivatedAt){
+        this.deactivatedAt=deactivatedAt;
     }
 
     //Getter y setter de resetToken

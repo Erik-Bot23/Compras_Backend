@@ -2,6 +2,7 @@ package com.erikjarquin.compras.repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -31,6 +32,21 @@ import com.erikjarquin.compras.model.enums.PaymentStatus;
  */
 public interface SaleRepository extends JpaRepository<SaleEntity, Long> {
     List<SaleEntity> findByCashRegister(CashRegisterEntity cashRegister);
+
+    /**
+     * Venta ya creada con esta clave de idempotencia (V6).
+     *
+     * <p>Es lo que permite que un doble "Enter" en el modal de cobro NO haga
+     * dos ventas: la segunda petición encuentra aquí la primera y devuelve esa
+     * misma venta en vez de crear otra.
+     *
+     * <p><b>Es un nombre DERIVADO y por eso funciona</b>: {@code findBy} +
+     * {@code IdempotencyKey} resuelve a la propiedad {@code idempotencyKey} de
+     * {@code SaleEntity}, que existe. (En cambio {@code existsByCashRegistersId}
+     * en {@code CashBoxRepository} NO funcionaba, porque buscaba una propiedad
+     * que no existe en ese lado de la relación; ver el javadoc de V4.)
+     */
+    Optional<SaleEntity> findByIdempotencyKey(String idempotencyKey);
 
     //Tendencia por día
     @Query("""

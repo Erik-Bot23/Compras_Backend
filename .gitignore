@@ -57,3 +57,7 @@ uploads/
 
 ### Logs (pueden contener SQL/datos sensibles) ###
 *.log
+
+### Python (generadores de PDF en docs/) ###
+__pycache__/
+*.pyc

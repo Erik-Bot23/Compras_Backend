@@ -16,6 +16,10 @@ public class UserMapper {
         dto.setName(entity.getName());
         dto.setEmail(entity.getEmail());
         dto.setActive(entity.isActive());
+        // Fechas de alta y baja (V5): sin esto el frontend no puede filtrar la
+        // tabla de dados de baja por rango de fechas.
+        dto.setActivatedAt(entity.getActivatedAt());
+        dto.setDeactivatedAt(entity.getDeactivatedAt());
 
         if (entity.getRole() != null) {
             dto.setRoleId(entity.getRole().getId());

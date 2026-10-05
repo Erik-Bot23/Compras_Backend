@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.erikjarquin.compras.model.dto.Reports.CashBoxReportDTO;
 import com.erikjarquin.compras.model.dto.Reports.CashReportDTO;
 import com.erikjarquin.compras.model.dto.Reports.CategoryPerformanceDTO;
 import com.erikjarquin.compras.model.dto.Reports.LowStockDTO;
@@ -128,5 +129,28 @@ public class ReportController {
     @GetMapping("/cash/{cashId}")
     public CashReportDTO getCashReport(@PathVariable Long cashId){
         return reportsService.getCashReport(cashId);
+    }
+
+    /**
+     * Reporte de una CAJA FÍSICA con todas sus sesiones (V5).
+     *
+     * <p>Reemplaza la pantalla de "corte de caja" por una de "historial de caja":
+     * el selector trae cajas y acá se listan sus turnos, cada uno con sus ventas.
+     *
+     * <p>Va por {@code boxId} (el id de {@code cash_boxes}) y no por el de un
+     * turno, porque la caja es lo que el cajero reconoce.
+     *
+     * @param from   fecha inicial (inclusive). null = sin límite.
+     * @param to     fecha final (inclusive). null = hoy.
+     * @param userId filtra por usuario. null = todos.
+     */
+    @PreAuthorize("hasAuthority('VER_REPORTES')")
+    @GetMapping("/cash-box/{boxId}")
+    public CashBoxReportDTO getCashBoxReport(
+            @PathVariable Long boxId,
+            @RequestParam(required = false) LocalDate from,
+            @RequestParam(required = false) LocalDate to,
+            @RequestParam(required = false) Long userId){
+        return reportsService.getCashBoxReport(boxId, from, to, userId);
     }
 }

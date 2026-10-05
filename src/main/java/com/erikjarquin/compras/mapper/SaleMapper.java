@@ -81,6 +81,14 @@ public class SaleMapper {
         response.setCancelled(sale.isCancelled());
         response.setCancelledAt(sale.getCancelledAt());
 
+        // Usuario de la venta (V5). Se copia el nombre al DTO en vez de dejar la
+        // entidad: asi el reporte no depende de la relacion LAZY (que fuera de
+        // transicion daria error) y el frontend ya recibe el texto listo.
+        if(sale.getUser() != null){
+            response.setUserId(sale.getUser().getId());
+            response.setUserName(sale.getUser().getName());
+        }
+
         List<SaleDetailResponse> items = sale.getDetails() == null ? List.of() : sale.getDetails().stream().map(this::toDetailItem).toList();
         response.setItems(items);
 

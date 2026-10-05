@@ -10,13 +10,16 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.erikjarquin.compras.exceptions.CashException;
 import com.erikjarquin.compras.mapper.CashRegisterMapper;
+import com.erikjarquin.compras.model.dto.Cash.CashBoxRequest;
+import com.erikjarquin.compras.model.dto.Cash.CashBoxResponse;
 import com.erikjarquin.compras.model.dto.Cash.CashResponse;
 import com.erikjarquin.compras.model.dto.Cash.CashSummaryResponse;
 import com.erikjarquin.compras.model.dto.Cash.CloseCashRequest;
-import com.erikjarquin.compras.model.dto.Cash.CreateCashRequest;
 import com.erikjarquin.compras.model.dto.Cash.OpenCashRequest;
+import com.erikjarquin.compras.model.entity.CashBoxEntity;
 import com.erikjarquin.compras.model.entity.CashRegisterEntity;
 import com.erikjarquin.compras.model.entity.SaleEntity;
+import com.erikjarquin.compras.repository.CashBoxRepository;
 import com.erikjarquin.compras.repository.CashRegisterRepository;
 import com.erikjarquin.compras.repository.SaleRepository;
 import com.erikjarquin.compras.service.CashRegisterService;
@@ -24,29 +27,32 @@ import com.erikjarquin.compras.service.CashRegisterService;
 /**
  * Implementación de la caja registradora.
  *
- * El modelo cambió en V3 (2026-09-30): la caja se CREA antes de abrirse.
- * Antes, {@code POST /open} creaba la fila y el número se escribía en ese
- * momento. Ahora hay dos pasos:
- * 
- * {@link #create(CreateCashRequest)}: se registra la caja física con su
- *       número. La fila nace con {@code openedAt = null}.
- * {@link #open(OpenCashRequest)}: se elige una de las cajas ya registradas
- *       y se abre. El número tiene que existir antes para poder elegirlo.
- * 
+ * <p><b>El modelo V4 separa dos cosas que V3 confundía en una sola tabla.</b>
+ * Un negocio tiene POCAS cajas físicas (CAJA 1, CAJA 2) y MUCHOS turnos. Antes
+ * cada fila de {@code cash_registers} era "una caja", y como su número era
+ * UNIQUE, la segunda vez que se abría "CAJA 1" daba 409: ese día no había forma
+ * de volver a abrir la caja que sí existía.
  *
- * Consecuencia: una caja se abre UNA sola vez. El número es UNIQUE, o
- * sea una fila por caja física, así que reabrir "CAJA 1" metería dos turnos en
- * el mismo corte y el reporte por caja mostraría ventas de la mañana junto a
- * ventas de la tarde como si fueran del mismo turno. Para un turno nuevo se crea
- * "CAJA 2".
+ * <p>La solución son dos tablas:
+ * <ul>
+ *   <li>{@code cash_boxes} ({@link CashBoxEntity}): las cajas FÍSICAS. Pocas
+ *       filas, cambian poco. Es la lista que el cajero elige al abrir.</li>
+ *   <li>{@code cash_registers} ({@link CashRegisterEntity}): las SESIONES. Una
+ *       fila por cada apertura y cierre. Crece todos los días y guarda el corte
+ *       congelado (qué se vendió, cuánto había, cuánto se contó).</li>
+ * </ul>
+ * Una caja puede tener muchas sesiones. Es el caso normal, no la excepción.
  *
- * Reglas que se siguen respetando:
- * 
- * Una sola caja abierta a la vez (409 si ya hay una).
- * El fondo inicial mínimo es 100 y nunca negativo.
- * El cierre exige cuadrar el efectivo, con salida de emergencia que
- *       pide un motivo.
- * 
+ * <p>Reglas que se siguen respetando:
+ * <ul>
+ *   <li>Una sola caja abierta a la vez (409 si ya hay). Dos cajas abiertas al
+ *       mismo tiempo harían imposible saber a cuál pertenece cada venta.</li>
+ *   <li>El fondo inicial mínimo es 100 y nunca negativo.</li>
+ *   <li>El cierre exige cuadrar el efectivo, con salida de emergencia que pide
+ *       un motivo.</li>
+ *   <li>Una caja con cortes nunca se borra: se da de baja. Ver
+ *       {@link #desactiveBox(Long)}.</li>
+ * </ul>
  */
 @Service
 public class CashRegisterImpl implements CashRegisterService {
@@ -71,99 +77,19 @@ public class CashRegisterImpl implements CashRegisterService {
     private static final int MAX_REASON_LENGTH = 255;
 
     private final CashRegisterRepository repository;
+    private final CashBoxRepository cashBoxRepository;
     private final CashRegisterMapper mapper;
     private final SaleRepository saleRepository;
 
     public CashRegisterImpl(
         CashRegisterRepository repository,
         CashRegisterMapper mapper,
-        SaleRepository saleRepository){
+        SaleRepository saleRepository,
+        CashBoxRepository cashBoxRepository){
         this.repository = repository;
         this.mapper = mapper;
         this.saleRepository=saleRepository;
-    }
-
-    // =========================================================================
-    //  CREAR la caja física (V3)
-    // =========================================================================
-
-    /**
-     * Registra una caja nueva, todavía sin abrir.
-     *
-     * La fila nace con {@code openedAt = null} y {@code active = false}, que
-     * es lo que la distingue de una caja ya cerrada (esa tiene ambos
-     * informados). En V1 {@code opened_at} y {@code opening_amount} ya eran
-     * nullable, así que no hizo falta alterar la tabla para soportar cajas que
-     * todavía no abren.
-     */
-    @Override
-    @Transactional
-    public CashResponse create(CreateCashRequest request){
-        String number = normalizeNumber(request.getNumber());
-
-        //Se valida aquí y no solo con el UNIQUE de la BD: la base lanzaría una
-        //violación de constraint (500, sin mensaje útil); esto da un 409 que
-        //explica por qué importa que sea único.
-        if(repository.existsByNumber(number)){
-            throw new CashException(
-                "Ya existe una caja con el numero \"" + number + "\". "
-                + "Cada caja necesita un numero unico para poder filtrar los reportes.",
-                HttpStatus.CONFLICT);
-        }
-
-        CashRegisterEntity cash = new CashRegisterEntity();
-        cash.setNumber(number);
-        //Sin esto la columna NOT NULL de total_tickets (V1) revienta al insertar.
-        cash.setTotalTickets(0);
-        cash.setActive(false);
-        //openedAt y openingAmount se quedan en null: esta caja aun no abre.
-
-        return mapper.toResponse(repository.save(cash));
-    }
-
-    /**
-     * Cajas todavía sin abrir: las que el usuario puede elegir para abrir.
-     */
-    @Override
-    @Transactional(readOnly = true)
-    public List<CashResponse> getAvailable(){
-        return repository.findByOpenedAtIsNullOrderByNumberAsc().stream()
-                .map(mapper::toResponse)
-                .toList();
-    }
-
-    /**
-     * Sugiere el siguiente número libre con el patrón "CAJA n" (V3).
-     *
-     * Existe para que el modal de crear caja venga con "CAJA 7" ya escrito en
-     * vez de obligar a contar cuántas hay. Solo sugiere: el usuario puede
-     * cambiarlo, y si elSuggested número ya existe, {@link #create} lo rechaza
-     * con 409 en vez de fallar en silencio.
-     */
-    @Override
-    @Transactional(readOnly = true)
-    public String getNextSuggestedNumber(){
-        int max = 0;
-
-        for(CashRegisterEntity cash : repository.findAll()){
-            String number = cash.getNumber();
-            if(number == null){
-                continue;
-            }
-            //Solo interessan los que siguen el patrón "CAJA <número>"
-            String[] parts = number.trim().split("\\s+");
-            if(parts.length != 2 || !parts[0].equalsIgnoreCase("CAJA")){
-                continue;
-            }
-            try{
-                max = Math.max(max, Integer.parseInt(parts[1]));
-            }catch(NumberFormatException ignored){
-                //Un número escrito a mano ("CAJA PRINCIPAL") no cuenta para el
-                //siguiente: no es un error, solo no sigue el patrón.
-            }
-        }
-
-        return "CAJA " + (max + 1);
+        this.cashBoxRepository=cashBoxRepository;
     }
 
     // =========================================================================
@@ -171,17 +97,23 @@ public class CashRegisterImpl implements CashRegisterService {
     // =========================================================================
 
     /**
-     * Abre una caja YA REGISTRADA (V3).
+     * Abre un turno con una caja física ya registrada (V4).
      *
-     * Tres validaciones, en este orden y por razones distintas:
-     * 
-     *   Solo una caja abierta a la vez: si ya hay una activa, 409.
-     *       Es la regla de siempre, no cambia.
-     *   La caja debe existir: 404 si el número no está registrado. No
-     *       se crea al vuelo como antes, porque el número tiene que poder elegirse.
-     *   La caja no puede haberse usado antes: 409 si {@code openedAt}
-     *       ya está informado, porque una caja es un turno.
-     * 
+     * <p><b>Qué cambió respecto a V3.</b> En V3 la fila de {@code cash_registers}
+     * <i>era</i> la caja, y como su número era UNIQUE no se podía volver a abrir.
+     * Ahora el modelo separa dos conceptos que V3 confundía en una sola tabla:
+     * <ul>
+     *   <li>{@code cash_boxes}: las cajas FÍSICAS del local. Pocas filas.</li>
+     *   <li>{@code cash_registers}: las SESIONES. Una fila por cada apertura y
+     *       cierre. Crece todos los días.</li>
+     * </ul>
+     * Abrir es entonces: buscar la caja por número en {@code cash_boxes} y crear
+     * una sesión nueva en {@code cash_registers} que apunte a ella. La misma caja
+     * puede abrirse todos los días, y cada turno queda como una fila aparte.
+     *
+     * <p>Se mantiene la regla de UNA caja abierta a la vez (409 si ya hay): dos
+     * cajas abiertas al mismo tiempo harían imposible saber a cuál pertenece cada
+     * venta.
      */
     @Override
     @Transactional
@@ -194,39 +126,48 @@ public class CashRegisterImpl implements CashRegisterService {
 
         String number = normalizeNumber(request.getNumber());
 
-        CashRegisterEntity cash = repository.findByNumber(number)
+        CashBoxEntity caja = cashBoxRepository.findByNumber(number)
                 .orElseThrow(() -> new CashException(
                     "No existe una caja registrada con el numero \"" + number
-                    + "\". Crerala primero con el botón \"Crear caja\".",
+                    + "\". Crerala primero con el boton \"Ver cajas\".",
                     HttpStatus.NOT_FOUND));
 
-        //Una caja ya abierta o ya cerrada no se reutiliza (ver el javadoc de la
-        //clase): reabrirla mezclaría dos turnos en el mismo corte.
-        if(cash.getOpenedAt() != null){
+        if(!caja.isActive()){
             throw new CashException(
-                "La caja \"" + number + "\" ya se usó"
-                + (cash.getClosedAt() != null ? " y se cerró el " + cash.getClosedAt() : "")
-                + ". Una caja es un turno: crea una caja nueva para el siguiente.",
+                "La caja \"" + number + "\" esta dada de baja y no se puede abrir.",
                 HttpStatus.CONFLICT);
         }
 
         BigDecimal openingAmount = validateOpeningAmount(request.getOpeningAmount());
 
-        //Inicializa los totales en 0 para que la caja exista desde el arranque
-        //aunque no tenga ventas, y el corte muestre ceros en vez de nulos.
-        cash.setCashSales(BigDecimal.ZERO);
-        cash.setDebitSales(BigDecimal.ZERO);
-        cash.setCreditSales(BigDecimal.ZERO);
-        cash.setTotalSales(BigDecimal.ZERO);
-        cash.setExpectedAmount(openingAmount);
-        cash.setDifference(BigDecimal.ZERO);
-        cash.setDifferenceReason(null);
+        // ===== SESIÓN NUEVA =====
+        // No se reutiliza la fila anterior: cada turno es su propio corte, con su
+        // propio dinero contado y su propia diferencia. Por eso se crea un
+        // CashRegisterEntity nuevo en vez de actualizar el anterior.
+        CashRegisterEntity sesion = new CashRegisterEntity();
+        sesion.setNumber(number);          // copia historica del numero
+        sesion.setCashBox(caja);           // a que caja fisica pertenece
+        // IMPORTANTE: los acumulados NACEN en cero. El fondo inicial NO es una
+        // venta: va en openingAmount, y expectedAmount = openingAmount + cashSales.
+        // Si se sembrara cashSales con el fondo, el "esperado" del corte contaria
+        // el fondo dos veces (una como openingAmount y otra como cashSales) y el
+        // cajero veria una diferencia fantasma igual al doble del fondo.
+        sesion.setCashSales(BigDecimal.ZERO);
+        sesion.setDebitSales(BigDecimal.ZERO);
+        sesion.setCreditSales(BigDecimal.ZERO);
+        sesion.setTotalSales(BigDecimal.ZERO);
+        sesion.setDifference(BigDecimal.ZERO);
+        sesion.setDifferenceReason(null);
+        sesion.setExpectedAmount(openingAmount);
+        sesion.setTotalTickets(0);
+        sesion.setOpenedAt(LocalDateTime.now());
+        sesion.setOpeningAmount(openingAmount);
+        sesion.setActive(true);
 
-        cash.setOpenedAt(LocalDateTime.now());
-        cash.setOpeningAmount(openingAmount);
-        cash.setActive(true);
+        caja.setUpdatedAt(LocalDateTime.now());
+        cashBoxRepository.save(caja);
 
-        return mapper.toResponse(repository.save(cash));
+        return mapper.toResponse(repository.save(sesion));
     }
 
     /**
@@ -253,6 +194,273 @@ public class CashRegisterImpl implements CashRegisterService {
         }
         return openingAmount;
     }
+
+    // =========================================================================
+    //  CRUD de cajas físicas (V4)
+    // =========================================================================
+
+    /**
+     * Registra una caja física nueva.
+     *
+     * <p>No es abrir caja: esto solo la da de alta en el inventario del local.
+     * Abrir un turno es {@link #open(OpenCashRequest)}, que crea una SESIÓN
+     * nueva apuntando a esta caja.
+     */
+    @Override
+    @Transactional
+    public CashBoxResponse createBox(CashBoxRequest request){
+        String number = normalizeNumber(request.getNumber());
+
+        //Se valida aquí y no solo con el UNIQUE de la BD: PostgreSQL lanzaría una
+        //violación de constraint (500, sin mensaje útil). Esto da un 409 que
+        //explica el porqué.
+        if(cashBoxRepository.existsByNumber(number)){
+            throw new CashException(
+                "Ya existe una caja con el numero \"" + number + "\".",
+                HttpStatus.CONFLICT);
+        }
+
+        CashBoxEntity caja = new CashBoxEntity();
+        caja.setNumber(number);
+        caja.setDescription(normalizeDescription(request.getDescription()));
+        caja.setActive(true);
+        caja.setCreatedAt(LocalDateTime.now());
+
+        return toBoxResponse(cashBoxRepository.save(caja));
+    }
+
+    /**
+     * Todas las cajas del local, incluidas las dadas de baja.
+     *
+     * <p>Incluidas a propósito: la tabla "Ver cajas" es también el lugar donde se
+     * ve que una caja se dio de baja y por qué (tiene cortes). Ocultarlas
+     * haría creer que desaparecieron.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<CashBoxResponse> getBoxes(){
+        return cashBoxRepository.findAllByOrderByNumberAsc().stream()
+                .map(this::toBoxResponse)
+                .toList();
+    }
+
+    /**
+     * Cajas que se pueden abrir ahora: activas y sin ninguna sesión abierta.
+     *
+     * <p>Alimenta el selector del modal "Abrir caja". Ya no se filtran en Java
+     * con "las que nunca se abrieron" (V3): una caja que se abrió el lunes se
+     * vuelve a abrir el martes, así que el criterio correcto es "¿tiene algún
+     * turno abierto AHORA?".
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<CashBoxResponse> getOpenable(){
+        return cashBoxRepository.findOpenable().stream()
+                .map(this::toBoxResponse)
+                .toList();
+    }
+
+    /** Edita número y descripción de una caja. */
+    @Override
+    @Transactional
+    public CashBoxResponse updateBox(Long id, CashBoxRequest request){
+        CashBoxEntity caja = cashBoxRepository.findById(id)
+                .orElseThrow(() -> new CashException(
+                    "La caja no existe", HttpStatus.NOT_FOUND));
+
+        //El número solo se cambia si viene informado: un PUT con number vacío no
+        //debe borrar el número de una caja que ya tiene cortes.
+        if(request.getNumber() != null && !request.getNumber().isBlank()){
+            String number = normalizeNumber(request.getNumber());
+
+            //409 solo si el número es OTRO: renombrar una caja a su propio número
+            //no es un duplicado, y sin esta guarda un usuario que solo quiere
+            //corregir la descripción recibe un error falso.
+            if(!number.equals(caja.getNumber()) && cashBoxRepository.existsByNumber(number)){
+                throw new CashException(
+                    "Ya existe otra caja con el numero \"" + number + "\".",
+                    HttpStatus.CONFLICT);
+            }
+
+            caja.setNumber(number);
+        }
+
+        if(request.getDescription() != null){
+            caja.setDescription(normalizeDescription(request.getDescription()));
+        }
+
+        caja.setUpdatedAt(LocalDateTime.now());
+
+        return toBoxResponse(cashBoxRepository.save(caja));
+    }
+
+    /**
+     * Da de baja una caja: deja de ofrecerse al abrir, pero NO se borra.
+     *
+     * <p>Esta es la única operación de "baja" que existe, y es a propósito. Una
+     * caja que ya tuvo cortes tiene ventas apuntando a su sesión, y la sesión a
+     * la caja. Borrarla dejaría ventas sin caja y el reporte "filtrar por caja"
+     * no podría agruparlas: el historial de ese turno se volvería inalcanzable.
+     *
+     * <p>Por eso el borrado físico solo tiene sentido para una caja que NUNCA se
+     * abrió (no tiene ventas). Ese caso no se expone como endpoint: se resuelve
+     * desactivando, que es una operación reversible y sin consecuencias. Una caja
+     * recién creada que se creó por error se da de baja y ya no estorba.
+     */
+    @Override
+    @Transactional
+    public void desactiveBox(Long id){
+        CashBoxEntity caja = cashBoxRepository.findById(id)
+                .orElseThrow(() -> new CashException(
+                    "La caja no existe", HttpStatus.NOT_FOUND));
+
+        if(!caja.isActive()){
+            throw new CashException(
+                "La caja \"" + caja.getNumber() + "\" ya esta dada de baja.",
+                HttpStatus.CONFLICT);
+        }
+
+        //No se puede dar de baja una caja con el turno abierto: el cajero está
+        //contando el dinero de ella ahora mismo, y desactivarla le desaparecería
+        //el corte de encima mientras lo cierra.
+        if(repository.findByCashBoxIdAndActiveTrue(caja.getId()).isPresent()){
+            throw new CashException(
+                "La caja \"" + caja.getNumber() + "\" tiene un turno abierto. "
+                + "Cierra el turno antes de darla de baja.",
+                HttpStatus.CONFLICT);
+        }
+
+        caja.setActive(false);
+        caja.setUpdatedAt(LocalDateTime.now());
+        cashBoxRepository.save(caja);
+    }
+
+    /**
+     * Da de ALTA una caja que estaba dada de baja (V5).
+     *
+     * <p>Existe para que una caja retirada siga siendo recuperable. Sin esto,
+     * "dar de baja" sería una decisión irreversible y además malintencionada: si
+     * se da de baja por error (o porque se estaba reparando y ya terminó), no
+     * hay vuelta atrás.
+     *
+     * <p><b>No se puede reutilizar el número para otra caja.</b> El UNIQUE está
+     * en {@code cash_boxes.number} y la fila NO se borra al dar de baja, así que
+     * el número queda ocupado para siempre: la caja dada de baja y la que se
+     * re-activan son <b>la misma caja con su mismo historial</b>. Es lo correcto:
+     * sus ventas siguen apuntando a sus turnos, y perder ese enlace dejaría
+     * ventas sin caja.
+     */
+    @Override
+    @Transactional
+    public void activateBox(Long id){
+        CashBoxEntity caja = cashBoxRepository.findById(id)
+                .orElseThrow(() -> new CashException(
+                    "La caja no existe", HttpStatus.NOT_FOUND));
+
+        if(caja.isActive()){
+            throw new CashException(
+                "La caja \"" + caja.getNumber() + "\" ya esta dada de alta.",
+                HttpStatus.CONFLICT);
+        }
+
+        caja.setActive(true);
+        caja.setUpdatedAt(LocalDateTime.now());
+        cashBoxRepository.save(caja);
+    }
+
+    /**
+     * BORRA una caja, pero solo si nunca se abrió. Si ya tuvo turnos, da 409.
+     *
+     * <p>Esta es la contraparte de {@link #desactiveBox(Long)} y implementa
+     * exactamente la regla del dueño: <b>lo que ya tuvo corte de caja no se
+     * borra, se da de baja.</b>
+     *
+     * <p>Por qué el borrado físico es aceptable SOLO en este caso: una caja que
+     * nunca se abrió no tiene sesiones, y las sesiones son las que apuntan a las
+     * ventas. Sin sesiones no hay nada que romperse, así que borrarla es
+     * limpio. En cuanto la caja tuvo un turno, sus ventas quedan colgando de él y
+     * borrar dejaría ventas sin caja: el reporte "filtrar por caja" no podría
+     * agruparlas y el corte de ese día sería inalcanzable.
+     *
+     * <p>Por eso el borrado es condicional y el 409 dice exactamente qué hacer
+     * ("dala de baja") en vez de dejar al usuario adivinando.
+     */
+    @Override
+    @Transactional
+    public void deleteBox(Long id){
+        CashBoxEntity caja = cashBoxRepository.findById(id)
+                .orElseThrow(() -> new CashException(
+                    "La caja no existe", HttpStatus.NOT_FOUND));
+
+        if(repository.findByCashBoxIdAndActiveTrue(caja.getId()).isPresent()){
+            throw new CashException(
+                "La caja \"" + caja.getNumber() + "\" tiene un turno abierto. "
+                + "Cierra el turno antes de borrarla.",
+                HttpStatus.CONFLICT);
+        }
+
+        if(cashBoxRepository.hasSessions(id)){
+            throw new CashException(
+                "La caja \"" + caja.getNumber() + "\" ya tiene cortes y no se puede borrar. "
+                + "Dala de baja: deja de ofrecerse al abrir, pero sus ventas siguen en el historial.",
+                HttpStatus.CONFLICT);
+        }
+
+        cashBoxRepository.delete(caja);
+    }
+
+    /**
+     * Historial de UNA caja: un corte por turno, de la más reciente a la más
+     * antigua. La misma caja abierta el lunes y el viernes devuelve 2 filas.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<CashResponse> getBoxHistory(Long boxId){
+        if(!cashBoxRepository.existsById(boxId)){
+            throw new CashException("La caja no existe", HttpStatus.NOT_FOUND);
+        }
+
+        return repository.findByCashBoxIdOrderByOpenedAtDesc(boxId).stream()
+                .map(mapper::toResponse)
+                .toList();
+    }
+
+    /** Descripción opcional: recortada y acotada al VARCHAR(255) de la columna. */
+    private String normalizeDescription(String description){
+        if(description == null || description.isBlank()){
+            return null;
+        }
+
+        String trimmed = description.trim();
+
+        return trimmed.length() > MAX_REASON_LENGTH
+                ? trimmed.substring(0, MAX_REASON_LENGTH)
+                : trimmed;
+    }
+
+    /**
+     * Caja física → DTO, enriquecida con cuántos turnos tiene y si está en uso.
+     *
+     * <p>El conteo se hace con una consulta por caja. Son pocas cajas (dos o
+     * tres), así que el N+1 es irrelevante y el código queda legible.
+     */
+    private CashBoxResponse toBoxResponse(CashBoxEntity caja){
+        List<CashRegisterEntity> sesiones =
+                repository.findByCashBoxIdOrderByOpenedAtDesc(caja.getId());
+
+        CashBoxResponse dto = new CashBoxResponse();
+        dto.setId(caja.getId());
+        dto.setNumber(caja.getNumber());
+        dto.setDescription(caja.getDescription());
+        dto.setActive(caja.isActive());
+        dto.setCreatedAt(caja.getCreatedAt());
+        dto.setSessionsCount(sesiones.size());
+        dto.setInUse(sesiones.stream().anyMatch(CashRegisterEntity::getActive));
+        dto.setLastOpenedAt(sesiones.isEmpty() ? null : sesiones.get(0).getOpenedAt());
+
+        return dto;
+    }
+
 
     /**
      * Cierra la caja exigiendo que el efectivo contado cuadre.
@@ -381,7 +589,45 @@ public class CashRegisterImpl implements CashRegisterService {
     //  Consultas
     // =========================================================================
 
-    //Ver la caja activa
+    /**
+     * Sugiere el siguiente número libre con el patrón "CAJA n".
+     *
+     * <p>Existe para que el alta de caja venga con "CAJA 7" ya escrito en vez de
+     * obligar a contar cuántas hay. Cuenta sobre {@code cash_boxes} (las cajas
+     * físicas), que es donde el número es UNIQUE: si contara sobre los cortes,
+     * sugeriría un número que una caja existente ya tiene y el alta fallaría
+     * con 409.
+     *
+     * <p>Solo sugiere: si el número ya existe, {@link #createBox} lo rechaza con
+     * 409 en vez de fallar en silencio.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public String getNextSuggestedNumber(){
+        int max = 0;
+
+        for(CashBoxEntity caja : cashBoxRepository.findAll()){
+            String number = caja.getNumber();
+            if(number == null){
+                continue;
+            }
+            //Solo interessan los que siguen el patrón "CAJA <número>"
+            String[] parts = number.trim().split("\\s+");
+            if(parts.length != 2 || !parts[0].equalsIgnoreCase("CAJA")){
+                continue;
+            }
+            try{
+                max = Math.max(max, Integer.parseInt(parts[1]));
+            }catch(NumberFormatException ignored){
+                //Un número escrito a mano ("CAJA PRINCIPAL") no cuenta para el
+                //siguiente: no es un error, solo no sigue el patrón.
+            }
+        }
+
+        return "CAJA " + (max + 1);
+    }
+
+    //Ver el turno abierto
     @Override
     @Transactional(readOnly = true)
     public CashResponse getActiveCash(){

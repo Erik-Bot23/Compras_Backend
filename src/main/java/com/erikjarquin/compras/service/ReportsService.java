@@ -6,6 +6,7 @@ import java.util.List;
 import com.erikjarquin.compras.model.dto.Reports.CategoryPerformanceDTO;
 import com.erikjarquin.compras.model.dto.Reports.LowStockDTO;
 import com.erikjarquin.compras.model.dto.Reports.MarginDTO;
+import com.erikjarquin.compras.model.dto.Reports.CashBoxReportDTO;
 import com.erikjarquin.compras.model.dto.Reports.CashReportDTO;
 import com.erikjarquin.compras.model.dto.Reports.PaymentMethodDTO;
 import com.erikjarquin.compras.model.dto.Reports.PeriodSalesDTO;
@@ -40,4 +41,14 @@ public interface ReportsService {
 
     //V3: detalle de una caja (sus ventas y su utilidad) por id
     CashReportDTO getCashReport(Long cashId);
+
+    /**
+     * Reporte de una CAJA FISICA con todas sus sesiones (V5).
+     *
+     * @param boxId  id de {@code cash_boxes}
+     * @param from   fecha inicial (inclusive); null = sin limite
+     * @param to     fecha final (inclusive); null = hoy
+     * @param userId solo los turnos con ventas de este usuario; null = todos
+     */
+    CashBoxReportDTO getCashBoxReport(Long boxId, LocalDate from, LocalDate to, Long userId);
 }

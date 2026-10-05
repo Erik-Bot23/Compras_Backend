@@ -56,6 +56,280 @@ Base de los 12 módulos = `/api/local`:
 
 ## Registro de cambios / decisiones
 
+### 2026-10-04 — V6: idempotencia del cobro (un doble Enter ya no cobra dos veces)
+
+> Encargo: que apretar Enter dos veces en el modal de pago **no** genere dos
+> ventas, y revisar la paginación del carrito de compras.
+> Explicación completa en **`docs/07-Paginacion-Carrito-e-Idempotencia-Ventas.pdf`**
+> (generador: `docs/generar_pdf_v6_idempotencia.py`, que **reimporta** los
+> estilos del generador del PDF 06 para que la serie no se diversifique).
+
+**El bug**: el modal de cobro es un `<form>`. Doble Enter → dos POST a
+`/sales` → **dos ventas**, con el stock descontado dos veces, dos tickets y el
+corte de caja descuadrado. El daño no era visual: era una inconsistencia en los
+números que alimentan inventario y reportes.
+
+#### 0. La decisión de la que depende todo: **la clave la genera el cliente**
+
+🔑 Si el backend generara la clave en cada petición, cada una sería distinta y
+la protección no serviría de nada. La clave identifica la **intención de
+cobro**, y esa intención vive en el navegador del cajero. Por eso la columna es
+nullable y **sin `DEFAULT`**: las ventas anteriores a V6 (y las de otros
+caminos) no la llevan.
+
+| Momento | Qué pasa con la clave |
+|---|---|
+| Se abre el modal de cobro | Se genera **una clave nueva** |
+| Se aprieta Enter (1 o 100 veces) | Se **reutiliza** la misma |
+| Se paga con tarjeta | Se **reutiliza**: es el mismo cobro |
+| Venta confirmada | La clave muere con ese cobro |
+
+🔑 **Se genera al ABRIR el modal, no al CONFIRMAR.** Si se generara en el clic
+de confirmar, cada Enter tendría su propia clave y cada una sería una venta
+nueva: exactamente el bug. Está escrito en `openPaymentModal()` para que nadie
+lo "simplifique" moviéndolo.
+
+#### 1. Las TRES capas (y por qué la del medio no basta)
+
+| Capa | Pieza | Qué aporta |
+|---|---|---|
+| Frontend | `isProcessing` + botón `[disabled]` | Evita el 2.º **clic**. Nada más. |
+| Frontend | `idempotencyKey` en el request | Viaja la **intención** de cobro |
+| **Base de datos** | `UNIQUE` parcial | **Garantiza** que no haya venta doble |
+| Backend | `findByIdempotencyKey` | Reconoce el reintento |
+| Backend | `catch DataIntegrityViolationException` | Resuelve la carrera |
+
+🔑 El botón deshabilitado **no arreglaba el bug** y esa es la parte que costó
+entender: previene el segundo clic, pero no el caso real, que es que **las dos
+peticiones ya viajan por la red a la vez**. Además recargar la pestaña o
+reintentar por timeout volvería a crear la venta.
+
+#### 2. La carrera simultánea y el detalle no obvio de PostgreSQL
+
+La comprobación previa resuelve el doble Enter **secuencial**, pero no el
+paralelo: si las dos peticiones buscan antes de que ninguna escriba, las dos
+ven "no existe" y las dos insertan. Lo resuelve el `UNIQUE`:
+
+```sql
+CREATE UNIQUE INDEX idx_sales_idempotency
+    ON public.sales (idempotency_key) WHERE idempotency_key IS NOT NULL;
+```
+
+🔑 **Lo que hace que la recuperación funcione sin reintentos**: en PostgreSQL el
+INSERT perdedor **se bloquea dentro del índice** hasta que la transacción
+ganadora resuelve, y el error de duplicado **solo se emite cuando la ganadora
+ya hizo COMMIT**. Por eso al releer, la fila **ya está confirmada y visible**.
+No hay carrera al releer. Si se cambia a una BD sin este comportamiento, hace
+falta un ciclo de reintentos y esta nota hay que rehacerla.
+
+- `SaleController.processSale()` → `catch (DataIntegrityViolationException)` →
+  `service.findByIdempotencyKey(clave)` → si no hay venta, **relanza el error**.
+- 🔑 **Ese `orElseThrow(() -> e)` no es un detalle menor**: un
+  `DataIntegrityViolationException` no siempre es un cobro duplicado (puede ser
+  stock o un dato inválido). Tragárselo dejaría al cajero creyendo que cobró.
+- 🔑 **La relectura es `@Transactional(readOnly = true)` a propósito**: se
+  ejecuta *después* de que la transacción perdedora revirtió. Leer en la
+  transacción ya `rollback-only` lanzaría `UnexpectedRollbackException`.
+
+#### 3. `normalizarClave()` — tres trampas evitadas
+
+| Trampa | Qué pasó si no se normaliza |
+|---|---|
+| `"  x  "` vs `"x"` | La **misma** intención se volvía 2 claves distintas |
+| `"   "` (blanco) | Buscar por `""` hace que **todas** las ventas sin clave colisionen |
+| 200 caracteres | Revienta el `VARCHAR(64)` → 500 |
+
+#### 4. Índice **parcial**, y por qué
+
+Un `UNIQUE` normal ya permite varios `NULL` (`NULL != NULL`), así que el filtro
+no es necesario para la corrección: es **optimización**. Se deja porque `sales`
+es la tabla más grande y casi todas sus filas tienen la clave en `NULL` (ventas
+viejas, otros flujos). Un índice parcial sobre las pocas que sí la tienen es
+mucho más pequeño.
+
+#### 5. `findByIdempotencyKey` es un nombre DERIVADO
+
+`findBy` + `IdempotencyKey` → propiedad `idempotencyKey` de `SaleEntity`, que
+existe. 🔑 El mismo error ya se cometió en `CashBoxRepository` con
+`existsByCashRegistersId` (la propiedad se llama `cashRegister`, no
+`cashRegisters`). Regla vigente: si el nombre derivado no compila, el problema
+suele estar en el **nombre de la propiedad**.
+
+#### 6. Verificación
+
+- **`273/273` tests en verde** (262 previos + 11 nuevos):
+  `SaleImplIdempotencyTest` (7) y `SaleControllerIdempotencyTest` (4).
+- 🔑 **Dos pruebas fallaron al escribirlas y la culpa fue del código, no del
+  test**: con la clave ausente el servicio **no consulta el repo** (corta
+  antes). El test afirmaba un stub que nunca se usaba y Mockito lo marcó como
+  *unnecessary stubbing*. Se corrigió el assert a `never()`, **no** la prueba.
+- **V6 aplicada en Supabase** y registrada por Flyway (informó
+  `already exists, skipping`: el `IF NOT EXISTS` haciendo su trabajo).
+- **Prueba real con 2 peticiones EN PARALELO**, misma clave, 2 unidades cada una,
+  stock inicial 17: ambas respondieron **`saleId=8`**, **1** venta creada, stock
+  17 → **15** (no 13), **1** renglón de detalle.
+- Caso **secuencial** con otra clave: 1.ª `saleId=10`, 2.ª `saleId=10`.
+- **Limpieza**: las 2 ventas de prueba se **anularon por la API** (no se
+  borraron a mano: el módulo es append-only, ver doc 02) y la caja abierta se
+  cerró. Estado final: stock **17** y **0** cajas abiertas.
+
+### 2026-10-01 — V5: ventas por usuario, fechas de alta/baja, re-alta de caja e historial de caja
+
+> Encargo: poder buscar *"quién vendió esto"*, *"cuándo se fue esta persona"*, y
+> ver *"qué pasó en CAJA 1"* con todos sus turnos. Todo sale de una pregunta mal
+> hecha: **¿qué pasa cuando algo se repite?**
+>
+> Explicación completa en `docs/06-Venta-Usuario-y-Historial-Caja.pdf`
+> (13 secciones, con el código). Verificación: `mvnw test` → **258/258**,
+> `ng build` del frontend → OK.
+
+**0. Las tres decisiones que se tomaron antes de escribir código**
+
+| # | Ambigüedad | Decisión | Por qué |
+|---|---|---|---|
+| 1 | ¿Se rellena el usuario de las ventas viejas? | **No: quedan en `NULL`** | El dato no existía. Inventar un usuario fabricaría un reporte falso; un `NULL` se muestra como "Sin usuario" y no miente. |
+| 2 | ¿La caja dada de baja libera su número? | **No, nunca** | El `UNIQUE` está en `cash_boxes.number` y la fila no se borra al dar de baja. Reactivarla es **la misma caja** con su historial: sus ventas apuntan a sus turnos y los turnos a ella. |
+| 3 | Con filtro de usuario, ¿el turno sin ventas de ese usuario aparece? | **No, desaparece** | Mostrarlo con $0 sería información falsa: "este turno no vendió nada" ≠ "este turno no aparece porque Juan no trabajó ahí". |
+
+**1. `sales.user_id` (V5) — la venta sabe quién la hizo**
+
+La venta solo apuntaba al TURNO. Eso hacía imposibles dos preguntas muy
+normales: *¿qué caja vendió Juan?* y *¿cuánto vendió cada cajero?*.
+
+- `V5__ventas_usuario_y_usuarios_fechas.sql`: columna + índice + FK.
+- 🔑 **`ON DELETE SET NULL`, no `CASCADE`**: borrar un usuario **no** borra sus
+  ventas. Con `CASCADE`, borrar un usuario borraría el historial de ventas del
+  local, que es un dato del negocio y no del empleado. Perder una venta es peor
+  que perder un dato de ella.
+- `SaleEntity.user` es **`FetchType.LAZY`**: el filtro por usuario solo necesita
+  el id (que ya viene en la propia venta) y el nombre se pide en el reporte. Con
+  `EAGER`, listar el historial haría un SELECT extra por venta (N+1).
+
+**2. El usuario sale del token, nunca del cuerpo de la petición**
+
+```java
+//SaleImpl.createBaseSale()
+sale.setUser(currentUserOrNull());   // lee el SecurityContext
+```
+
+🔑 Si el endpoint aceptara `{"userId": 7}` en el JSON, cualquiera con un token
+válido podría registrar ventas a nombre de otro y el reporte de "quién vendió"
+dejaría de ser confiable — que es justo lo que se agregó para poder auditar.
+El usuario sale del `SecurityContext` porque el JWT ya fue validado.
+
+`currentUserOrNull()` devuelve `null` en vez de fallar: los tests de integración
+no levantan el filtro de seguridad, y una llamada interna no lo tiene. El costo
+es una venta sin usuario, que es el mismo estado que las de antes de V5.
+
+**3. `users.activated_at` / `users.deactivated_at` (V5) — "desde cuándo"**
+
+`active` es un booleano: dice SÍ está dado de baja, pero no CUÁNDO. Con eso
+*"buscar el registro de quien se fue en abril"* no tiene respuesta.
+
+```java
+createUser     -> setActivatedAt(now); setDeactivatedAt(null);
+activateUser   -> setActivatedAt(now); setDeactivatedAt(null);   // re-activar
+deactivateUser -> if(estaba activo) setDeactivatedAt(now);
+                  setActivatedAt(null);
+```
+
+Dos detalles que parecen redundantes y no lo son:
+
+- 🔑 **La guarda `if(user.isActive())` en la baja**: si se llama dos veces, sin
+  la guarda la segunda pisaría la fecha y se perdería la **original**, que es la
+  que responde "¿desde cuándo se fue?". La fecha de baja es un *hecho*, no un
+  estado reescribible.
+- **Se limpia `activatedAt` al dar de baja**: la regla de coherencia es que cada
+  usuario tiene exactamente una de las dos fechas. Si vuelve a darse de alta, la
+  tabla de "dados de baja" no debe seguir mostrándolo.
+
+> Esto **no** es un historial de cambios: es la última alta y la última baja.
+> Para tener cada cambio haría falta una tabla de auditoría, que no existe y no
+> hace falta aquí.
+
+`idx_users_deactivated_at` es un índice **parcial** (`WHERE active = false`):
+la única consulta que lo usa es la tabla de dados de baja; indexar toda la tabla
+gastaría espacio en las filas activas, que nunca se buscan por esa columna.
+
+**4. Re-alta de caja: `PATCH /api/local/cash/boxes/{id}/active`**
+
+Hace que "dar de baja" sea **reversible**: si se dio de baja por error, o porque
+una caja se estaba reparando y ya terminó, hay salida. No borra nada ni crea una
+caja nueva.
+
+| Estado | `DELETE` | `PATCH /{id}` (baja) | `PATCH /{id}/active` |
+|---|---|---|---|
+| Nunca se abrió | ✅ | ✅ | no hace falta |
+| Ya tuvo turnos | ❌ 409 | ✅ | ✅ |
+| Turno abierto | ❌ 409 | ❌ 409 | ❌ 409 |
+
+**5. `GET /api/local/reports/cash-box/{boxId}` — historial por CAJA**
+
+Reemplaza la pantalla de "corte de caja". Antes el selector listaba **turnos**:
+una caja abierta diez veces aparecía diez veces con el mismo texto "CAJA 1", y
+era imposible responder "¿qué pasó en CAJA 1?". Ahora el selector trae **cajas** y
+la tabla trae sus **turnos**, uno por fila.
+
+DTO nuevo: `CashBoxReportDTO` → `CashBoxSessionDTO` → `CashSessionSellerDTO`.
+
+Tres decisiones que hay que entender:
+
+- 🔑 **El filtro se aplica en Java, no en SQL.** Una caja tiene 2-3 turnos: el
+  conjunto es chico y se filtra en memoria sin penalizar. A cambio, **una sola
+  pasada** calcula ventas, el agrupado por vendedor y la utilidad. En SQL serían
+  4 consultas y luego reconciliarlas en Java, que es donde se esconden los bugs.
+- **Los montos se calculan sobre las ventas FILTRADAS** (si filtras por Juan,
+  ves el total de Juan). El `openingAmount` sí viene del corte congelado: es
+  dinero físico del cajón, no una venta.
+- 🔑 **`difference` llega en `NULL` con filtros, y hay un flag `filtrado`.** La
+  diferencia es un dato congelado del turno **completo**. Con filtro de usuario
+  y un total de $200, mostrar "diferencia: -50" afirmaría un descuadre que **no
+  ocurrió**. Es el tipo de mentira que un corte de caja no puede decir, así que
+  la UI **oculta la columna** en vez de pintar un cero.
+
+El agrupado por vendedor usa `computeIfAbsent` sobre un `LinkedHashMap`: el mismo
+vendedor puede vender en varios turnos y en la tabla aparece una vez por turno.
+Las ventas sin dueño se agrupan aparte al final, con nombre explícito
+("Sin usuario"), en vez de inventar un "Desconocido" que parecería real.
+
+**6. `SaleDetailHistoryResponse` gana `userId` / `userName`**
+
+`SaleMapper.toDetailResponse()` copia el **nombre** al DTO en vez de dejar la
+entidad: así el reporte no depende de la relación LAZY (que fuera de
+transacción lanzaría `LazyInitializationException`) y el frontend recibe el texto
+listo.
+
+**7. Cambios en `SaleEntity` / `CashRegisterService`**
+
+- `SaleImpl` gana `UserRepository` en el constructor (para `currentUserOrNull`).
+- `CashRegisterService/Impl` ganan `activateBox(Long)`.
+- `CashBoxRepository` cambió `existsByCashRegistersId` (nombre derivado roto, ya
+  documentado en la entrada de V4) por `hasSessions(@Param)` con `@Query`.
+
+**8. Lo que NO se hizo (a propósito)**
+
+- **No se rellenó el usuario de las ventas anteriores a V5.** Ver decisión 0.1.
+- **No se tocó `cash_registers.number` ni V4.** Se acumulan: V4 ya hizo las cajas reutilizables.
+- **No se agregaron las columnas "Estado"/"Acciones" al historial.** Se
+  quitaron el 2026-09-30 y sigue igual: el historial es una consulta, no una mesa
+  de trabajo.
+- **No se borró ningún endpoint.** Los de V3 (`POST /cash`, `GET /cash/available`)
+  ya se habían eliminado; `DELETE /boxes/{id}` se mantiene con su 409.
+
+**9. Verificación**
+
+| Qué | Cómo | Resultado |
+|---|---|---|
+| Suite completa | `mvnw clean test -Dtest='!ComprasApplicationTests'` | **258/258** |
+| Frontend | `ng build` | OK |
+| Filtro de usuario | Smoke manual (ver §7.1 del PDF) | Pendiente de probar en la UI |
+
+⚠️ Al probar en la UI: las ventas nuevas deben salir con nombre de usuario en
+el detalle del turno. Las viejas saldrán como "Sin usuario", y eso es lo
+correcto.
+
+
+
 ### 2026-09-30 (4) — Precio de venta, caja que cuadra, validaciones y estilos
 
 > Encargo de 7 puntos. El común denominador: **nada se contabiliza sin que un humano
@@ -644,10 +918,11 @@ tocar nada. Si se confirman como opcionales, no hay que rehacer este código.
 
 - 🔜 **Fases 2-8 de `docs/PLAN.md`** (lo siguiente: Fase 2 = Platillos + Insumos + Recetas). Antes de escribir código nuevo, leer la entrada del 2026-09-30 de arriba.
 - ✅ ~~SKU/Barcode duplicado devuelve 500~~ → **resuelto** (409). Ver sesión 2026-09-28.
+- ✅ ~~Doble Enter cobra dos veces~~ → **resuelto en V6** (clave de idempotencia + índice UNIQUE). Ver sesión 2026-10-04 y el PDF 07. Requisito: el cliente debe mandar la clave; sin ella la venta se crea normal (compatibilidad con clientes viejos).
 - ⚠️ **`/ping` sigue sin existir** — no usarlo como healthcheck de Railway.
 - ⚠️ **Secretos en historial de git**: purgar con `git filter-repo` antes de publicar el repo.
 - **Imágenes**: sin perfil dev/prod separado en el frontend para `environment-prod.ts` (requiere definir la API de Railway al desplegar).
-- **Tests**: **234 en verde** con `-Dtest='!ComprasApplicationTests'` (repos + servicios + file storage + 12 controllers WebMvc + bootstraps). `ComprasApplicationTests` (`@SpringBootTest`) solo corre contra una BD real accesible.
+- **Tests**: **273 en verde** con '-Dtest='!ComprasApplicationTests' (repos + servicios + file storage + 12 controllers WebMvc + bootstraps + 11 pruebas de idempotencia). ComprasApplicationTests (@SpringBootTest) solo corre contra una BD real accesible.
 - Frontend: módulos **Clientes y Facturas descartados** (permisos eliminados). `Caja` sigue como placeholder porque su "hoja de corte" vive hoy en Reportes. `reversePayment` del backend no tiene UI (requiere un listado/detalle de pagos).
 - **BD local**: el CHECK `permissions_name_check` (generado por Hibernate para `@Enumerated`) NO se actualiza con `ddl-auto:update`. Al agregar permisos al enum el arranque puede fallar con "viola la restricción check" → droppear el constraint en BD local (`ALTER TABLE permissions DROP CONSTRAINT permissions_name_check`) o usar BD nueva. Con Flyway en `validate` el CHECK lo define la migración V1 (34) — mantenerla sincronizada con `PermissionName`.
 - **Código pendiente**: falta cambiar `System.out.println` de los bootstraps por un logger. ⚠️ Al estar trabajando entre máquinas, un AGENTS.md desactualizado hizo que otra laptop recreara `pingController`; ya está eliminado de nuevo (ver sesión 2026-09-17) — no recrearlo.

@@ -12,6 +12,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -93,6 +94,25 @@ public class SaleEntity {
     @ManyToOne
     @JoinColumn(name = "cash_register_id")
     private CashRegisterEntity cashRegister;
+
+    /**
+     * Usuario (empleado) que registró la venta (V5).
+     *
+     * <p>Es lo que permite responder "¿qué caja vendió Juan?" y "¿cuánto vendió
+     * cada cajero?": antes la venta solo apuntaba al turno, y de un turno no se
+     * puede saber quién cobró cada ticket.
+     *
+     * <p><b>LAZY</b> porque el filtro por usuario solo necesita el id (que ya
+     * viene en la propia venta) y el nombre se pide en una consulta aparte de
+     * reportes. Con EAGER, listar el historial de ventas haría un SELECT extra
+     * por venta.
+     *
+     * <p><b>NULL en las ventas anteriores a V5</b>: el dato nunca se guardó y no
+     * se inventa. Por eso el filtro por usuario solo aplica a ventas nuevas.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id")
+    private UserEntity user;
 
     @Enumerated(EnumType.STRING)
     private PaymentStatus paymentStatus;
@@ -192,6 +212,44 @@ public class SaleEntity {
 
     public void setCashRegister(CashRegisterEntity cashRegister){
         this.cashRegister=cashRegister;
+    }
+
+    //Getter y setter de user (V5: quién registró la venta)
+    public UserEntity getUser(){
+        return user;
+    }
+
+    public void setUser(UserEntity user){
+        this.user=user;
+    }
+
+    /**
+     * Clave de idempotencia del intento de cobro (V6).
+     *
+     * <p>El cliente la genera (un UUID por intento) y la repite en cada reintento
+     * del MISMO cobro. Si la clave ya existe en la tabla, el backend devuelve la
+     * venta ya creada en vez de crear otra: sin esto, un doble "Enter" en el
+     * modal de cobro descuenta el stock dos veces y genera dos tickets por una
+     * sola compra.
+     *
+     * <p><b>La genera el CLIENTE, no el servidor.</b> Si la generara el backend en
+     * cada petición, cada una sería distinta y la protección no serviría de
+     * nada: la clave tiene que viajar con la intención de cobro, no con la
+     * llamada.
+     *
+     * <p>Es nullable: las ventas anteriores a V6 y las creadas por otros caminos
+     * no la tienen. En PostgreSQL un UNIQUE admite varios NULL (porque
+     * NULL != NULL), así que no estorban.
+     */
+    @Column(name = "idempotency_key", length = 64)
+    private String idempotencyKey;
+
+    public String getIdempotencyKey(){
+        return idempotencyKey;
+    }
+
+    public void setIdempotencyKey(String idempotencyKey){
+        this.idempotencyKey=idempotencyKey;
     }
 
     //Getter y setter de paymentStatus

@@ -4,30 +4,36 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
 /**
  * Entidad {@code cash_registers}: registro de apertura/cierre de caja.
  *
- * <p>active=true indica la caja vigente (solo una a la vez). Durante el cierre
+ * active=true indica la caja vigente (solo una a la vez). Durante el cierre
  * se congela el "corte": expectedAmount (fondo inicial + ventas en efectivo),
  * difference (contado - esperado) y los totales por método de pago.
  *
- * <p><b>number (V3, 2026-09-30)</b> es el número que escribe el vendedor al
+ * number (V3, 2026-09-30) es el número que escribe el vendedor al
  * abrir la caja. Es UNIQUE a propósito: es lo que permite después "filtrar por
  * caja" en Reportes y ver las ventas de cada corte. Si dos cajas pudieran
  * compartir número, el filtro juntaría dos cortes distintos en una misma fila.
  *
- * <p>Nota: el usuario que abre la caja NO se registra en esta versión (la
+ * Nota: el usuario que abre la caja NO se registra en esta versión (la
  * relación a User sigue planeada, por eso la entidad no tiene FK a users). Se
  * mantiene la regla de UNA caja activa a la vez.
  */
 @Entity
 @Table(name = "cash_registers")
 public class CashRegisterEntity {
+    @ManyToOne(fetch = FetchType.LAZY)
+    @jakarta.persistence.JoinColumn (name = "cash_box_id")
+    private CashBoxEntity cashBox;
+    
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -207,5 +213,14 @@ public void setNumber(String number){
 
     public void setTotalTickets(int totalTickets){
         this.totalTickets=totalTickets;
+    }
+
+    //Getter y setter de cashBox
+    public CashBoxEntity getCashBox(){
+        return cashBox;
+    }
+
+    public void setCashBox(CashBoxEntity cashBox){
+        this.cashBox=cashBox;
     }
 }

@@ -3,12 +3,18 @@ package com.erikjarquin.compras.model.dto.Cash;
 import java.math.BigDecimal;
 
 /**
- * Petición de apertura de caja ({@code POST /api/local/cash/open}, V3).
+ * Petición de apertura de un turno ({@code POST /api/local/cash/open}).
  *
- * <p><b>number</b> es la caja existente que se va a abrir. Antes este endpoint
- * creaba la caja y por eso el número se escribía aquí; ahora la caja se crea
- * aparte ({@code POST /api/local/cash}) y aquí solo se elige cuál abrir. Ver
- * {@link CreateCashRequest} para el porqué del cambio.
+ * <p><b>number</b> es la caja FÍSICA que se va a abrir, y tiene que existir en
+ * {@code cash_boxes} ({@code POST /api/local/cash/boxes}). Hay dos motivos por los
+ * que el número viene aquí y no se crea en este mismo request:
+ * <ul>
+ *   <li>El número identifica a la caja en el inventario y en los reportes, así
+ *       que tiene que existir antes para poder elegirse de una lista.</li>
+ *   <li>Una caja se abre MUCHAS veces (una por día, por ejemplo). Si este
+ *       endpoint creara la caja, la segunda vez daría conflicto de unicidad.</li>
+ * </ul>
+ * Ver {@code CashRegisterImpl.open} para el detalle.
  *
  * <p><b>openingAmount</b> es el fondo con el que arranca el turno. Tiene un
  * mínimo de 100 porque una caja que abre con 0 o con 50 no permite ni una venta
@@ -24,8 +30,11 @@ public class OpenCashRequest {
     private BigDecimal openingAmount;
 
     /**
-     * Número de la caja que se abre (V3). Debe existir y no haber sido usada
-     * antes: una caja es un turno, y reabrir la misma mezclaría dos cortes.
+     * Número de la caja física que se abre.
+     *
+     * <p>Ya NO tiene que estar "sin usar": como una caja se abre todos los días,
+     * lo único que se exige es que exista, que esté activa y que no tenga un
+     * turno abierto ahora mismo.
      */
     private String number;
 

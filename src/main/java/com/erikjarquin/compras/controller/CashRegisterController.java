@@ -2,25 +2,40 @@ package com.erikjarquin.compras.controller;
 
 import java.util.List;
 
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.erikjarquin.compras.model.dto.Cash.CashBoxRequest;
+import com.erikjarquin.compras.model.dto.Cash.CashBoxResponse;
 import com.erikjarquin.compras.model.dto.Cash.CashResponse;
 import com.erikjarquin.compras.model.dto.Cash.CashSummaryResponse;
 import com.erikjarquin.compras.model.dto.Cash.CloseCashRequest;
-import com.erikjarquin.compras.model.dto.Cash.CreateCashRequest;
 import com.erikjarquin.compras.model.dto.Cash.OpenCashRequest;
 import com.erikjarquin.compras.service.CashRegisterService;
 
 /**
- * Caja registradora: apertura, cierre, resumen y consulta de caja activa.
+ * Caja registradora. Cubre DOS recursos distintos (V4):
  *
- * Permisos: ABRIR_CAJA, CERRAR_CAJA, VER_CAJA, CORTE_CAJA.
+ * <ol>
+ *   <li><b>Cajas físicas</b> ({@code /boxes}): el inventario de cajas del local.
+ *       CRUD: listar, crear, editar, dar de baja y borrar (solo si nunca se
+ *       abrió).</li>
+ *   <li><b>Turnos</b> ({@code /open}, {@code /close}, {@code /active},
+ *       {@code /summary}, {@code /history}): la apertura y el cierre. Cada
+ *       apertura crea un turno nuevo, y una misma caja puede tener muchos.</li>
+ * </ol>
+ *
+ * <p>Permisos: ABRIR_CAJA (registrar, editar, dar de baja y abrir cajas),
+ * CERRAR_CAJA, VER_CAJA, CORTE_CAJA.
  * CORS global (${CORS_ALLOWED_ORIGINS}) en SecurityConfig.
  */
 @RestController
@@ -40,34 +55,99 @@ public class CashRegisterController {
     }
 
     /**
-     * CREAR una caja física (V3). La caja queda registrada pero NO abierta: se
-     * abre después eligiéndola en {@code POST /open}.
+     * Registra una caja física del local.
      *
-     * Se separa de "abrir" porque el número tiene que existir antes para poder
-     * elegirse. Un 409 si el número ya existe: sin unicidad, dos cortes distintos
-     * se mezclarían al filtrar reportes por caja.
+     * <p>Es un CRUD, no abrir caja: esto solo la da de alta en el inventario.
+     * Abrir un turno es {@code POST /open}.
      */
     @PreAuthorize("hasAuthority('ABRIR_CAJA')")
-    @PostMapping
-    public CashResponse create(@RequestBody CreateCashRequest request){
-        return service.create(request);
+    @PostMapping("/boxes")
+    public CashBoxResponse createBox(@RequestBody CashBoxRequest request){
+        return service.createBox(request);
+    }
+
+    /** Tabla "Ver cajas": todas, incluidas las dadas de baja. */
+    @PreAuthorize("hasAuthority('VER_CAJA')")
+    @GetMapping("/boxes")
+    public List<CashBoxResponse> getBoxes(){
+        return service.getBoxes();
     }
 
     /**
-     * Cajas todavía sin abrir: las que se pueden elegir para abrir.
+     * Cajas que se pueden abrir ahora: activas y sin turno abierto.
      *
-     * Usa {@code ABRIR_CAJA} y no {@code VER_CAJA} porque es el insumo directo
-     * de "abrir caja": quien puede abrir necesita saber qué cajas hay.
+     * Usa {@code ABRIR_CAJA} porque es el insumo directo de "abrir caja": quien
+     * puede abrir necesita saber qué cajas hay libres.
      */
     @PreAuthorize("hasAuthority('ABRIR_CAJA')")
-    @GetMapping("/available")
-    public List<CashResponse> getAvailable(){
-        return service.getAvailable();
+    @GetMapping("/boxes/openable")
+    public List<CashBoxResponse> getOpenable(){
+        return service.getOpenable();
     }
 
     /**
-     * Sugiere el siguiente número libre ("CAJA n") para prellenar el modal de
-     * crear caja. Es solo una sugerencia: el usuario puede escribir otro.
+     * Edita una caja (número y descripción).
+     *
+     * <p>Usa {@code ABRIR_CAJA} y no un {@code EDITAR_CAJA} nuevo a propósito: el
+     * inventario de cajas del local es una lista corta y estático que administra
+     * la misma persona que abre el turno. No justificaba un permiso aparte, y
+     * agregarlo habríaobligado a tocar el bootstrap de roles y permisos.
+     */
+    @PreAuthorize("hasAuthority('ABRIR_CAJA')")
+    @PutMapping("/boxes/{id}")
+    public CashBoxResponse updateBox(@PathVariable Long id, @RequestBody CashBoxRequest request){
+        return service.updateBox(id, request);
+    }
+
+/**
+     * Da de ALTA una caja que estaba dada de baja.
+     *
+     * <p>La caja conserva su número y todo su historial: reactivarla no crea una
+     * caja nueva, rehabilita la misma. Por eso el número no se puede volver a
+     * usar en otra caja.
+     */
+    @PreAuthorize("hasAuthority('ABRIR_CAJA')")
+    @PatchMapping("/boxes/{id}/active")
+    public ResponseEntity<Void> activateBox(@PathVariable Long id){
+        service.activateBox(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * BORRA una caja física. Solo funciona si NUNCA se abrió.
+     *
+     * <p>Con turnos devuelve 409 y el mensaje dice "dala de baja", que es la
+     * salida correcta: sus ventas siguen en el historial y no se pueden perder.
+     */
+    @PreAuthorize("hasAuthority('ABRIR_CAJA')")
+    @DeleteMapping("/boxes/{id}")
+    public ResponseEntity<Void> deleteBox(@PathVariable Long id){
+        service.deleteBox(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** Dar de baja una caja: deja de ofrecerse al abrir, pero sus ventas siguen
+     * en el historial. */
+    @PreAuthorize("hasAuthority('ABRIR_CAJA')")
+    @PatchMapping("/boxes/{id}")
+    public ResponseEntity<Void> desactiveBox(@PathVariable Long id){
+        service.desactiveBox(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    //Historial de la caja
+    @PreAuthorize("hasAuthority('VER_CAJA')")
+    @GetMapping("/boxes/{id}/history")
+    public List<CashResponse> getBoxHistory(@PathVariable Long id){
+        return service.getBoxHistory(id);
+    }
+
+    /**
+     * Sugiere el siguiente número libre ("CAJA n") para prellenar el alta de caja.
+     *
+     * <p>Es solo una sugerencia: el usuario puede escribir otro. Ya no cuenta
+     * sobre los cortes (V3) sino sobre las cajas físicas, porque el número ahora
+     * es único en {@code cash_boxes} y no en {@code cash_registers}.
      */
     @PreAuthorize("hasAuthority('ABRIR_CAJA')")
     @GetMapping("/next-number")

@@ -1,15 +1,20 @@
 package com.erikjarquin.compras.controller;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -26,6 +31,7 @@ import com.erikjarquin.compras.config.JwtUtil;
 import com.erikjarquin.compras.config.SecurityConfig;
 import com.erikjarquin.compras.config.security.SecurityAuthorityMapper;
 import com.erikjarquin.compras.exceptions.CashException;
+import com.erikjarquin.compras.model.dto.Cash.CashBoxResponse;
 import com.erikjarquin.compras.model.dto.Cash.CashResponse;
 import com.erikjarquin.compras.model.dto.Cash.CashSummaryResponse;
 import com.erikjarquin.compras.repository.UserRepository;
@@ -34,9 +40,10 @@ import com.erikjarquin.compras.service.CashRegisterService;
 /**
  * Tests del controlador de caja registradora.
  *
- * <p>Cubre apertura, cierre, resumen (hoja de corte) y consulta de caja activa.
- * También valida el permiso específico de cada endpoint (ABRIR_CAJA / CERRAR_CAJA
- * / CORTE_CAJA / VER_CAJA).
+ * <p>Cubre el CRUD de cajas físicas (V4), la apertura y cierre de turnos, el
+ * resumen (hoja de corte) y la consulta de caja activa. También valida el
+ * permiso específico de cada endpoint (ABRIR_CAJA / CERRAR_CAJA / CORTE_CAJA /
+ * VER_CAJA / EDITAR_CAJA).
  */
 @WebMvcTest(CashRegisterController.class)
 @Import(SecurityConfig.class)
@@ -238,49 +245,104 @@ class CashRegisterControllerTest {
     }
 
     // =========================================================================
-    //  V3: crear la caja, elegirla y el cuadre del cierre
+    //  V4: CRUD de cajas físicas + apertura de turno
     // =========================================================================
 
     /**
-     * Crear caja es un endpoint NUEVO y separado de abrir (V3): la caja se registra
-     * con su número y después se abre eligiéndola.
+     * Registrar caja física es un endpoint NUEVO y separado de abrir (V4).
+     *
+     * <p>Es un CRUD del inventario de cajas del local: no abre un turno ni mueve
+     * dinero. Abrir un turno es {@code POST /open}, que crea una sesión nueva
+     * apuntando a esta caja.
      */
     @Test
     @WithMockUser(authorities = "ABRIR_CAJA")
     void crearCaja_devuelve200ConElNumero() throws Exception {
-        when(cashService.create(any())).thenReturn(cajaConNumero("CAJA 1"));
+        when(cashService.createBox(any())).thenReturn(caja("CAJA 1", true, 0, false));
 
-        mockMvc.perform(post("/api/local/cash")
+        mockMvc.perform(post("/api/local/cash/boxes")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"number\":\"CAJA 1\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.number").value("CAJA 1"))
-                .andExpect(jsonPath("$.active").value(false));
+                .andExpect(jsonPath("$.active").value(true))
+                .andExpect(jsonPath("$.sessionsCount").value(0));
     }
 
     @Test
     @WithMockUser(authorities = "ABRIR_CAJA")
     void crearCaja_numeroRepetido_devuelve409() throws Exception {
-        when(cashService.create(any())).thenThrow(new CashException(
+        when(cashService.createBox(any())).thenThrow(new CashException(
                 "Ya existe una caja con el numero \"CAJA 1\"", HttpStatus.CONFLICT));
 
-        mockMvc.perform(post("/api/local/cash")
+        mockMvc.perform(post("/api/local/cash/boxes")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"number\":\"CAJA 1\"}"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("CASH_ERROR"));
     }
 
-    /** Las cajas sin abrir son el insumo directo del selector de "abrir caja". */
+    /** La tabla "Ver cajas" trae TODAS, incluidas las dadas de baja. */
     @Test
-    @WithMockUser(authorities = "ABRIR_CAJA")
-    void cajasDisponibles_devuelveLista() throws Exception {
-        when(cashService.getAvailable()).thenReturn(List.of(cajaConNumero("CAJA 1"), cajaConNumero("CAJA 2")));
+    @WithMockUser(authorities = "VER_CAJA")
+    void listarCajas_devuelveLista() throws Exception {
+        when(cashService.getBoxes()).thenReturn(List.of(
+                caja("CAJA 1", true, 3, false),
+                caja("CAJA 2", false, 1, false)));
 
-        mockMvc.perform(get("/api/local/cash/available"))
+        mockMvc.perform(get("/api/local/cash/boxes"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(2))
-                .andExpect(jsonPath("$[0].number").value("CAJA 1"));
+                .andExpect(jsonPath("$[0].number").value("CAJA 1"))
+                .andExpect(jsonPath("$[0].sessionsCount").value(3))
+                .andExpect(jsonPath("$[1].active").value(false));
+    }
+
+    /** El selector de "Abrir caja" pide las cajas LIBRES, no todas. */
+    @Test
+    @WithMockUser(authorities = "ABRIR_CAJA")
+    void cajasAbribles_devuelveSoloLasLibres() throws Exception {
+        when(cashService.getOpenable()).thenReturn(List.of(caja("CAJA 2", true, 0, false)));
+
+        mockMvc.perform(get("/api/local/cash/boxes/openable"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].number").value("CAJA 2"));
+    }
+
+    /** Editar y dar de baja usan ABRIR_CAJA: mismo permiso, mismo responsable. */
+    @Test
+    @WithMockUser(authorities = "ABRIR_CAJA")
+    void editarCaja_devuelve200() throws Exception {
+        when(cashService.updateBox(anyLong(), any())).thenReturn(caja("CAJA PRINCIPAL", true, 2, false));
+
+        mockMvc.perform(put("/api/local/cash/boxes/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"number\":\"CAJA PRINCIPAL\",\"description\":\"la de la entrada\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.number").value("CAJA PRINCIPAL"));
+    }
+
+    /** Dar de baja es PATCH, no DELETE: la caja nunca se borra. */
+    @Test
+    @WithMockUser(authorities = "ABRIR_CAJA")
+    void darDeBajaCaja_devuelve204() throws Exception {
+        mockMvc.perform(patch("/api/local/cash/boxes/1"))
+                .andExpect(status().isNoContent());
+
+        verify(cashService).desactiveBox(1L);
+    }
+
+    /** El historial de una caja devuelve un corte por turno. */
+    @Test
+    @WithMockUser(authorities = "VER_CAJA")
+    void historialDeCaja_devuelveUnCortePorTurno() throws Exception {
+        when(cashService.getBoxHistory(1L)).thenReturn(List.of(
+                cajaConNumero("CAJA 1"), cajaConNumero("CAJA 1")));
+
+        mockMvc.perform(get("/api/local/cash/boxes/1/history"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2));
     }
 
     /**
@@ -297,7 +359,12 @@ class CashRegisterControllerTest {
                 .andExpect(jsonPath("$.suggestedNumber").value("CAJA 3"));
     }
 
-    /** Abrir ahora manda el número de una caja EXISTENTE, no crea una nueva. */
+    /**
+     * Abrir un turno manda el número de una CAJA FÍSICA ya registrada.
+     *
+     * <p>La misma caja puede abrirse otra vez en otro día: por eso el endpoint
+     * sigue siendo el mismo y lo que cambia es que ahora crea una sesión nueva.
+     */
     @Test
     @WithMockUser(authorities = "ABRIR_CAJA")
     void abrirCaja_devuelve200() throws Exception {
@@ -325,7 +392,7 @@ class CashRegisterControllerTest {
 
     /**
      * El punto 5.1 del encargo: si el dinero no cuadra y no hay motivo, el cierre
-     * se rechaza con 409 y la caja sigue abierta.
+     * se rechaza con 409 y el turno sigue abierto.
      */
     @Test
     @WithMockUser(authorities = "CERRAR_CAJA")
@@ -341,7 +408,7 @@ class CashRegisterControllerTest {
                 .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("no cuadra")));
     }
 
-    /** Salida de emergencia: con motivo, el cierre proceeds. */
+    /** Salida de emergencia: con motivo, el cierre procede. */
     @Test
     @WithMockUser(authorities = "CERRAR_CAJA")
     void cerrarCaja_conMotivo_cierra() throws Exception {
@@ -360,12 +427,53 @@ class CashRegisterControllerTest {
     @Test
     @WithMockUser(authorities = "OTRO_PERMISO")
     void crearCaja_sinPermiso_devuelve403() throws Exception {
-        mockMvc.perform(post("/api/local/cash")
+        mockMvc.perform(post("/api/local/cash/boxes")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"number\":\"CAJA 9\"}"))
                 .andExpect(status().isForbidden());
 
-        verify(cashService, never()).create(any());
+        verify(cashService, never()).createBox(any());
+    }
+
+    /**
+     * Borrar una caja que ya tuvo cortes da 409 y el mensaje dice "dala de baja".
+     *
+     * <p>Es la regla del dueño: lo que ya tuvo corte de caja no se borra nunca.
+     */
+    @Test
+    @WithMockUser(authorities = "ABRIR_CAJA")
+    void borrarCaja_conCortes_devuelve409() throws Exception {
+        org.mockito.Mockito.doThrow(new CashException(
+                "La caja \"CAJA 1\" ya tiene cortes y no se puede borrar. Dala de baja.",
+                HttpStatus.CONFLICT))
+                .when(cashService).deleteBox(1L);
+
+        mockMvc.perform(delete("/api/local/cash/boxes/1"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CASH_ERROR"));
+    }
+
+/** Dar de baja una caja exige ABRIR_CAJA: sin permiso, 403. */
+    @Test
+    @WithMockUser(authorities = "OTRO_PERMISO")
+    void darDeBajaCaja_sinPermiso_devuelve403() throws Exception {
+        mockMvc.perform(patch("/api/local/cash/boxes/1"))
+                .andExpect(status().isForbidden());
+
+        verify(cashService, never()).desactiveBox(anyLong());
+    }
+
+    //Helper: caja física con sus datos de tabla
+    private CashBoxResponse caja(String numero, boolean active, int turnos, boolean inUse){
+        CashBoxResponse b = new CashBoxResponse();
+        b.setId(1L);
+        b.setNumber(numero);
+        b.setActive(active);
+        b.setSessionsCount(turnos);
+        b.setInUse(inUse);
+        b.setCreatedAt(LocalDateTime.now());
+        b.setLastOpenedAt(LocalDateTime.now().minusDays(1));
+        return b;
     }
 
     //Helper: caja con número

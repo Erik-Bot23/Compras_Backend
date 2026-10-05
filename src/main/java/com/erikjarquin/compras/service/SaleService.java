@@ -2,6 +2,7 @@ package com.erikjarquin.compras.service;
 
 
 import java.util.List;
+import java.util.Optional;
 
 import com.erikjarquin.compras.model.dto.Sale.SaleDetailHistoryResponse;
 import com.erikjarquin.compras.model.dto.Sale.SaleHistoryResponse;
@@ -29,6 +30,18 @@ import com.erikjarquin.compras.model.dto.Sale.SaleResponse;
  */
 public interface SaleService {
     SaleResponse processSale(SaleRequest request);
+
+    /**
+     * Venta ya registrada con esta clave de idempotencia, o vacío (V6).
+     *
+     * <p>No la usa el usuario: la usa el controlador como red de seguridad para
+     * el caso en que dos peticiones del mismo cobro se cruzan. Ver el comentario
+     * de {@code SaleController#processSale}.
+     *
+     * @param idempotencyKey clave del cobro; en blanco se trata como ausente.
+     */
+    Optional<SaleResponse> findByIdempotencyKey(String idempotencyKey);
+
     List<SaleHistoryResponse> getSales(); 
     SaleDetailHistoryResponse getSaleById(Long saleId);
 

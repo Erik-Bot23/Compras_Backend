@@ -1,5 +1,6 @@
 package com.erikjarquin.compras.service.impl;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -64,6 +65,10 @@ public class UserImpl implements UserService {
             new IllegalArgumentException("Rol no encontrado"));
         user.setRole(role);
         user.setActive(true);
+        //"Dado de alta" = el momento en que se creó la cuenta (V5). Es la fecha
+        //que responde "¿desde cuándo trabaja con nosotros?".
+        user.setActivatedAt(LocalDateTime.now());
+        user.setDeactivatedAt(null);
 
         UserEntity saved = repository.save(user);
 
@@ -93,16 +98,31 @@ public class UserImpl implements UserService {
         UserEntity user = repository.findById(id).orElseThrow(() ->
             new UserException("Usuario no encontrado"));
 
+        //Si ya estaba dado de baja no se pisa la fecha: se conserva la baja REAL
+        //(la primera), que es la que responde "¿desde cuándo se fue?". Si se
+        //sobrescribiera con cada llamada, al repetir la operación se perdería el
+        //dato original.
+        if(user.isActive()){
+            user.setDeactivatedAt(LocalDateTime.now());
+        }
+
+        //Al reactivarse después, la fecha de baja deja de ser la vigente: se
+        //limpia para que el filtro "dados de baja por fecha" no lo encuentre.
+        user.setActivatedAt(null);
         user.setActive(false);
         repository.save(user);
     }
 
-    //Activar usuario
+    //Activar usuario (y re-activar uno que estaba dado de baja)
     @Override
     public void activateUser(Long id){
         UserEntity user = repository.findById(id).orElseThrow(() ->
             new UserException("Usuario no encontrado"));
 
+        //Siempre se refresca: re-activar es un evento nuevo ("volvió el día X"),
+        // no una restauración del alta original.
+        user.setActivatedAt(LocalDateTime.now());
+        user.setDeactivatedAt(null);
         user.setActive(true);
         repository.save(user);
     }
