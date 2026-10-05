@@ -36,7 +36,7 @@
 --  llegan en el MISMO instante se leerían mutuamente como "no existe" y las dos
 --  insertarían. Con el, PostgreSQL deja pasar a una sola y rechaza a la otra.
 --
---  ⚠️ NO se pondría un DEFAULT: la clave la genera el CLIENTE, no el servidor.
+--  NO se pondría un DEFAULT: la clave la genera el CLIENTE, no el servidor.
 --  Si la generara el backend en cada petición, cada una sería distinta y la
 --  idempotencia no serviría de nada. Por eso es nullable: las ventas creadas
 --  antes de V6 (y las que se creen por otros caminos) simplemente no la tienen.

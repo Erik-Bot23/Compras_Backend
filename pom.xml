@@ -133,6 +133,46 @@
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 			</plugin>
+			<!--
+				Plugin de Flyway para poder hablar con la BD SIN arrancar la app.
+
+				Hace falta porque Spring Boot ejecuta el `validate` de Flyway en el
+				arranque: si una migración YA APLICADA cambia, el contexto aborta y no
+				deja hacer nada más — ni ver el estado, ni repararlo. Con este plugin
+				se revisa (`flyway:info`, `flyway:validate`) y se re-baselinea
+				(`flyway:repair`) sin levantar Tomcat ni HikariCP.
+
+				La versión del plugin la aporta spring-boot-starter-parent
+				(pluginManagement), así que no se escribe a mano: ponerla sería
+				garantizar que Maven y la app calculen los checksums con algoritmos
+				distintos y volver el problema del checksum mismatch.
+
+				SIN credenciales a propósito: este pom.xml SÍ se sube a git. Se pasan
+				por línea de comandos con -Dflyway.url / -Dflyway.user / -Dflyway.password
+				tomadas de src/main/resources/application-local.yaml (que está en
+				.gitignore), o mejor desde ~/.m2/settings.xml.
+
+				El <dependency> de abajo NO es opcional: desde Flyway 10 el soporte de
+				PostgreSQL vive en un módulo aparte. Sin él el plugin falla con
+				"No database found to handle jdbc:postgresql://".
+
+				Sí lleva <version>: a diferencia de las dependencias del proyecto, las
+				de un <plugin> NO heredan del <dependencyManagement> del POM. Por eso
+				se escribe ${flyway.version} (la propiedad que define el BOM de Spring
+				Boot) en vez de un número fijo — así el módulo sigue pegado a la misma
+				versión de Flyway que usa la app.
+			-->
+			<plugin>
+				<groupId>org.flywaydb</groupId>
+				<artifactId>flyway-maven-plugin</artifactId>
+				<dependencies>
+					<dependency>
+						<groupId>org.flywaydb</groupId>
+						<artifactId>flyway-database-postgresql</artifactId>
+						<version>${flyway.version}</version>
+					</dependency>
+				</dependencies>
+			</plugin>
 		</plugins>
 	</build>
 

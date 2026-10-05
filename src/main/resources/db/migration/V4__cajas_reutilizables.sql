@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS public.cash_boxes (
     CONSTRAINT cash_boxes_number_key UNIQUE (number)
 );
 
--- ⚠️ LENGTH: number es varchar(50) y description varchar(255), los MISMOS que
+-- LENGTH: number es varchar(50) y description varchar(255), los MISMOS que
 -- declara CashBoxEntity en Java. Si aquí fueran más cortos, Hibernate valida el
 -- esquema al arrancar (ddl-auto=validate en producción) y la app no levanta.
 
@@ -52,7 +52,7 @@ COMMENT ON TABLE public.cash_boxes IS
     'Registro de las CAJAS FISICAS del local (CAJA 1, CAJA 2, ...). '
     'Una caja se puede abrir y cerrar muchas veces: cada apertura crea una fila en cash_registers';
 
--- ⚠️ ESTA ES LA LÍNEA QUE ROMPIÓ EL ARRANQUE (la 20 de la versión anterior).
+-- ESTA ES LA LÍNEA QUE ROMPIÓ EL ARRANQUE (la 20 de la versión anterior).
 --
 -- Se escribió "COMMENT ON TABLE ... cash_boxes.number", pero eso le dice a
 -- PostgreSQL que la tabla se llama "number" DENTRO del esquema "cash_boxes".

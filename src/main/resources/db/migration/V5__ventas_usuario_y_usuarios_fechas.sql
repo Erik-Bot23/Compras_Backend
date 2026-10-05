@@ -14,7 +14,7 @@
 --     filtro por usuario de Reportes y la búsqueda en el historial de ventas
 --     se vuelven posibles.
 --
---     ⚠️ NULL EN LAS VENTAS QUE YA EXISTEN: no se puede saber quién las hizo,
+--     NULL EN LAS VENTAS QUE YA EXISTEN: no se puede saber quién las hizo,
 --     porque el dato nunca se guardó. Se dejan en NULL a propósito (no se inventa
 --     un usuario), y por eso el filtro por usuario solo aplica a las ventas
 --     nuevas. Un NULL no es un error: es "no lo sabemos".

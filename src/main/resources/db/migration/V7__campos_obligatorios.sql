@@ -57,7 +57,7 @@
 --  1. Relleno de lo que ya estaba vacío (solo si falta)
 -- ----------------------------------------------------------------------------
 --
---  🔑 REGLA DE ORO: esta migración NUNCA pisa un valor que ya existe. Solo
+--  REGLA DE ORO: esta migración NUNCA pisa un valor que ya existe. Solo
 --  escribe donde no hay nada. Si mañana se corre sobre una base con todos los
 --  SKUs puestos, estas sentencias no cambian ni un solo dato.
 --
@@ -73,7 +73,7 @@
 --  la razón de elegirlo: si alguien escanea este producto con una terminal,
 --  el código no se confunde con nada externo.
 --
---  ⚠️ ESTOS VALORES SON PROVISIONALES. El dueño del negocio debería
+--  ESTOS VALORES SON PROVISIONALES. El dueño del negocio debería
 --  reemplazarlos por los SKU y códigos de barras reales del producto. Hasta
 --  entonces el producto queda identificable y cobrable, que era el problema.
 --
@@ -137,7 +137,7 @@ ALTER TABLE public.products
 --  3. Comprobación final (si algo quedó sin rellenar, esto avisa)
 -- ----------------------------------------------------------------------------
 --
---  🔑 La condición no puede ser "NOT NULL" a secas: el NOT NULL ya está puesto
+--  La condición no puede ser "NOT NULL" a secas: el NOT NULL ya está puesto
 --  en el paso 2 y por lo tanto siempre es cierto. Lo que se verifica aquí es lo
 --  OPPOSTO: que no queden cadenas VACÍAS ni el texto 'NULL'.
 --
