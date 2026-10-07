@@ -48,6 +48,7 @@ Base de los 12 módulos = `/api/local`:
 ## Estado de módulos
 
 - **Terminal pagos**: abstracción `TerminalService` con `TerminalSimulatedImpl` (tarjetas de prueba DETERMINISTIC) y `TerminalPhysicalImpl` (Socket TCP, protocolo `PAY|`/`REV|`/`STS|`).
+- **Correo (recuperación de contraseña)**: hoy es **solo SMTP** y **no funciona en Railway Hobby** (bloquea los puertos 25/465/587). Está en curso migrarlo al patrón de la terminal (`EmailSender` + impl. SMTP + impl. Resend, selector `app.mail.provider`). **Ver la entrada del 2026-10-07: es un plan, aún no implementado.**
 - **Pagos**: estados PENDING/PROCESSING/APPROVED/REJECTED/REVERSED, reintentos (máx 3), idempotencia, reversas. `PaymentMonitorJob` (`@Scheduled`, cada 5 min) revisa pagos PENDING > 5 min.
 - **Dos frontends** (ruta hermana): `Compras-Frontend-Local` (Angular 21, POS, `:4200`) y `Compras-Frontend-Cliente` (Next.js 16, storefront, `:3000`). Ambos consumen este único backend. El Angular usa `${environment.apiLocal}`; el Next.js usará `${api}/tienda` (aún no existe). Ambos esperan que `img` de productos sea **URL completa**.
 - **Reportes**: dashboard hecho (ver sesión 2026-09-12 (3)). Las consultas agregan EN SQL y devuelven DTO; el frontend solo grafica con Chart.js (SSR-safe) y exporta PDF/Excel en cliente.
@@ -55,6 +56,219 @@ Base de los 12 módulos = `/api/local`:
 - **Tienda de comida (Fases 2-8, PENDIENTES)**: siguen sin existir `Insumo`, `Platillo`, `RecetaDetalle`, `Cliente`, `Pedido`, `DetallePedido`, el rol CLIENTE ni WebSocket. Ver `docs/PLAN.md`.
 
 ## Registro de cambios / decisiones
+
+### 2026-10-07 — Correo de recuperación: SMTP y Resend detrás de una interfaz (OPCIÓN B, **PENDIENTE**)
+
+> Encargo: Railway bloquea el SMTP saliente en plan Hobby y el correo de
+> recuperación de contraseña no sale. Se decidió **implementar la opción B** del
+> PDF `docs/08-Recuperacion-Contrasena-Resend-SMTP-Outlook.pdf`: **una interfaz, dos
+> implementaciones y un selector por configuración**.
+>
+> ⚠️ **NO SE IMPLEMENTÓ NADA TODAVÍA.** Esta entrada documenta el **plan** para
+> poder retomarlo desde cualquier máquina. **No hay ninguna clase nueva en el
+> repo.** Lo único que se agregó fue este `AGENTS.md` y el PDF 08.
+
+#### 0. El diagnóstico (por qué falla hoy)
+
+| Límite | Qué controla | Cómo se sube | ¿Aplica? |
+|---|---|---|---|
+| **Cuota de recursos** | CPU, RAM, disco | Pagar plan / crédito de consumo | **Sí** → por eso el plan ya no se traba |
+| **Restricción de red** | Qué puertos puede abrir la máquina | **Plan Pro + `redeploy`** | **Sí** → esta bloquea el correo |
+
+🔑 **Pagar NO lo arregla.** Son dos controles separados: el pago sube la cuota, la
+política de red solo sube con Pro **y además exige redeploy** (cambiar el plan no
+cambia la máquina ya desplegada).
+
+- Railway bloquea **25, 465 y 587**. Permite **443**.
+- El síntoma es `Connection timed out connecting to smtp.gmail.com:587`.
+  🔑 **`timeout` y no `connection refused` es la firma del firewall**: un puerto
+  cerrado de verdad se rechaza al instante; un paquete descartado se queda
+  esperando hasta expirar. Eso descarta "mal usuario/contraseña" como causa.
+- La salida: **API HTTPS** (puerto 443). Resend es la recomendada, plan gratuito.
+
+#### 1. El patrón YA EXISTE en el proyecto: la terminal de pagos
+
+🔑 **Este es el argumento más fuerte de la decisión**, y conviene tenerlo presente
+antes de escribir una línea. El proyecto **ya resolvió exactamente este problema**
+para la terminal, con el patrón completo:
+
+| Pieza | Terminal de pagos | Lo que se hará con el correo |
+|---|---|---|
+| Interfaz | `service/TerminalService.java` | `service/EmailSender.java` (a crear) |
+| Impl. A | `TerminalSimulatedImpl` (`SIMULATED`, `matchIfMissing=true`) | clase SMTP actual (a condicionar) |
+| Impl. B | `TerminalPhysicalImpl` (`PHYSICAL`) | `ResendEmailSender` (a crear) |
+| Selector | `payment.terminal.type` | `app.mail.provider` |
+| Propiedad | `${PAYMENT_TERMINAL_TYPE:SIMULATED}` | `${MAIL_PROVIDER:smtp}` |
+| Props tipadas | `config/TerminalConfig.java` (`@ConfigurationProperties`) | `config/MailConfig.java` (a crear) |
+
+🔑 **Mismo patrón, misma propiedad, mismos decoradores.** Quien lea `TerminalImpl`
+ya sabe leer `EmailSender` sin instrucción nueva. Elegir la estructura del correo
+distinta habría sido inventar una segunda convención en el mismo repo.
+
+⚠️ **La terminal usa `matchIfMissing=true` en la impl. A.** El valor por defecto
+tiene que ser el comportamiento **actual**, para que añadir la abstracción **no
+cambie nada** de lo que ya funciona. Por eso el default de `app.mail.provider`
+será **`smtp`**, no `resend`.
+
+#### 2. Las 3 decisiones tomadas (y por qué)
+
+| # | Ambigüedad | Decisión | Por qué |
+|---|---|---|---|
+| 1 | ¿Cambiar SMTP a la fuerza o dejarlobehind una interfaz? | **Interfaz + 2 implementaciones** (opción B) | Es lo que ya hace la terminal. Con interfaz, el respaldo SMTP se puede añadir **después** sin rehacer nada |
+| 2 | ¿Dónde queda el nombre `EmailService`? | **Hoy es una clase CONCRETA** (`@Service`, depende de `JavaMailSender`). Se **conserva intacta** como la impl. SMTP y se crea al lado `EmailSender` (interfaz) | Respeta "dejar las clases SMTP intactas" y **no obliga a renombrar nada** en un repo con 294 tests |
+| 3 | ¿El valor por defecto? | `smtp` | Si el default fuera `resend`, un despliegue sin la variable nueva **dejaría de enviar correo de golpe**. Al revés (default `smtp`) hoy sigue funcionando igual |
+
+⚠️ **Deuda de nomenclatura que se acepta a propósito:** la interfaz se llama
+`EmailSender` y no `EmailService`, porque `EmailService` **ya existe** como clase.
+La convención del repo sería `EmailService` (interfaz) + `EmailSmtpImpl` +
+`EmailResendImpl`. **Se acepta la diferencia** para no mover una clase que hoy
+funciona y tiene referencias; se puede alinear después con un rename mecánico si
+algún día se toca.
+
+#### 3. Lo que hay que CREAR (6 archivos)
+
+| # | Archivo | Responsabilidad |
+|---|---|---|
+| 1 | `service/EmailSender.java` | **Interfaz**: el método que hoy tiene `EmailService` (`sendPasswordRecoveryEmail(destinatario, enlace)`). Es la frontera del cambio |
+| 2 | `service/impl/EmailSmtpImpl.java` | **Ojo: NO hay que crear esto.** El código SMTP ya existe en `EmailService.java`. Decisión final: `EmailService` **implementa** `EmailSender` y se le pone el `@ConditionalOnProperty`. Ver §5 |
+| 3 | `service/impl/ResendEmailSender.java` | Arma el JSON y hace el `POST` HTTPS. Es el camino nuevo, el que desbloquea Railway |
+| 4 | `model/dto/resend/ResendEmailRequest.java` | Campos de la API: `from`, `to` (**lista**), `subject`, `html`/`text` |
+| 5 | `model/dto/resend/ResendEmailResponse.java` | El `id` del envío, para registrarlo en el log y depurar |
+| 6 | `exceptions/EmailDeliveryException.java` | "No se pudo enviar el correo", distinguible de otros fallos |
+
+*(La fila 2 queda así después de revisar el código real: crear una segunda
+implementación SMTP sería **duplicar** el que ya existe. Se documenta el cambio
+real en §5.)*
+
+#### 4. Lo que hay que MODIFICAR (5 archivos)
+
+| # | Archivo | Cambio | ⚠️ Cuidado |
+|---|---|---|---|
+| 1 | `service/EmailService.java` | Añadir `implements EmailSender` + `@ConditionalOnProperty(app.mail.provider=smtp, matchIfMissing=true)` | **Solo eso.** El `sendPasswordRecoveryEmail` no se toca. Sigue siendo texto plano |
+| 2 | `service/impl/AuthImpl.java` | **2 líneas**: el `import` y el tipo del campo inyectado (`EmailService` → `EmailSender`) | 🔑 **Si aquí hay un tercer cambio, es que se está haciendo el trabajo en el sitio equivocado.** El token, la vigencia de 1 h, el enlace y `repo.save()` quedan intactos |
+| 3 | `application.yaml` | Bloque `app.mail.*` (selector, url, api-key, from) y **defaults vacíos** en el bloque `spring.mail` | 🔑 **Ver §6: los `${MAIL_USERNAME}` hoy NO tienen default.** Es la trampa que rompe el arranque |
+| 4 | `application-local.yaml` | Las 3 variables nuevas para probar local | No está en git: regenerarlo en cada máquina |
+| 5 | `exceptions/GlobalExceptionHandler.java` | Handler de `EmailDeliveryException`, si se quiere respuesta limpia | Que un fallo de correo no sea un 500 opaco |
+
+#### 5. El cambio real en `AuthImpl` (y por qué NO comentar código)
+
+La idea inicial era **comentar** el código SMTP en `AuthImpl` y en los YAML.
+🔑 **Eso se descartó, y hay dos razones distintas:**
+
+1. **En `AuthImpl` comentar código es peor que las 2 líneas del cambio.** Dejaría
+   código muerto que se pudre en silencio y que nadie sabe si sigue siendo
+   válido. 📌 **Precedente en este repo:** el bloque comentado de la relación con
+   `User` en `CashRegisterEntity` terminó eliminándose (ver 2026-09-12 (2)). El
+   proyecto ya pagó por decidir que el código comentado no es documentación.
+2. **En los YAML comentar el bloque `spring.mail` es una bomba de reloj.** Ver §6.
+
+Lo correcto es **inyección por interfaz**: `AuthImpl` depende de `EmailSender` y no
+sabe cuál de las dos implementaciones hay. Eso es además lo que permite **probarla
+sin red** (mock de la interfaz), cosa que hoy no se puede porque el código llama a
+`JavaMailSender` directo.
+
+#### 6. 🔑 La trampa que rompe el arranque (leída del código real)
+
+`application.yaml` tiene:
+
+```yaml
+username: ${MAIL_USERNAME}     # <- SIN default
+password: ${MAIL_PASSWORD}     # <- SIN default
+```
+
+🔑 Si se pasa a `MAIL_PROVIDER=resend` y **se comentan o borran** `MAIL_USERNAME` /
+`MAIL_PASSWORD` del despliegue **sin tocar el bloque `spring.mail`**, la aplicación
+**NO LEVANTA**: Spring no logra resolver el placeholder y falla al inicializar, ANTES
+de llegar a cualquier código de correo. El síntoma sería "la app no arranquó" y
+nada tiene que ver con el correo — la peor forma de perder tiempo.
+
+**Regla:** **no borrar ni comentar el bloque `spring.mail`**. Agregarle defaults
+vacíos (`${MAIL_USERNAME:}`) para que **siempre** resuelva, y que la decisión se
+tome en `app.mail.provider`. Así el bloque es inofensivo en modo Resend.
+
+**Al revés también es cierto:** si el bean SMTP tiene `@ConditionalOnProperty` y en
+producción el valor está mal escrito (ej. `resemd`), **no existe ningún bean** y
+Spring **falla al arrancar**. 🔑 Eso es lo **deseado**: es mejor que la app no
+arranque que arrancar y que el correo llegue a un 500 que nadie descubre hasta que
+un usuario reporta que no le llega el enlace.
+
+#### 7. Variables de entorno
+
+| Variable | Obligatoria | Default | Nota |
+|---|---|---|---|
+| `MAIL_PROVIDER` | No | `smtp` | `smtp` \| `resend`. **Default = comportamiento actual** |
+| `RESEND_API_KEY` | Sí (si `resend`) | — | Secreto. Railway + `application-local.yaml` |
+| `RESEND_FROM` | Sí (si `resend`) | — | `no-reply@tudominio.com` tras verificar el dominio |
+| `RESEND_URL` | No | `https://api.resend.com` | Solo si se quiere explícito |
+| `FRONTEND_URL` | No | `http://localhost:4200` | 🔑 **Se mantiene.** Es la base del enlace |
+
+⚠️ **En producción el cambio se hace en las variables de RAILWAY, no en
+`application-local.yaml`** (ese archivo es gitignored y solo es de desarrollo).
+Cambiar de proveedor = **una** variable: `MAIL_PROVIDER`.
+
+🔑 **`FRONTEND_URL` es lo más delicado del cambio**: si no apunta al frontend real
+en el despliegue, el correo **sale bien y no sirve de nada** (enlace roto). En local
+el default ya es correcto, así que **las pruebas en local no lo detectan**. Hay
+que verificarlo a mano una vez en Railway.
+
+#### 8. Orden de implementación (con verificación en cada paso)
+
+Cada paso deja el sistema **funcionando**. Nada de cambiar todo y luego probar.
+
+| # | Paso | Verificación |
+|---|---|---|
+| 1 | Crear `EmailSender` + los 2 DTOs + `EmailDeliveryException` | Compila. **No cambia nada** |
+| 2 | `EmailService implements EmailSender` + `@ConditionalOnProperty(matchIfMissing=true)` | Local con SMTP: **el correo llega igual que antes** |
+| 3 | `AuthImpl`: cambiar `import` + tipo del campo (2 líneas) | Local con SMTP: correo llega. **Suite en verde** |
+| 4 | `MailConfig` (`@ConfigurationProperties("app.mail")`) + bloque `app.mail` en el YAML + **defaults vacíos** en `spring.mail` | Arranca en ambos modos |
+| 5 | `ResendEmailSender` + su `@ConditionalOnProperty(havingValue="resend")` | Local con `MAIL_PROVIDER=resend`: llega por HTTPS |
+| 6 | Probar con `onboarding@resend.dev` (solo al correo de la cuenta) | Correo recibido + estado en el panel de Resend |
+| 7 | Verificar dominio propio (SPF + DKIM + DMARC) y cambiar `RESEND_FROM` | 📨 **Bandeja de entrada**, no spam |
+| 8 | `MAIL_PROVIDER=resend` en Railway + redeploy | `forgot-password` **desde fuera**, a un Gmail ajeno al proyecto |
+| 9 | *(opcional)* Respaldo SMTP con cadena de `catch` | Cortar Resend a propósito: el correo sigue saliendo |
+
+🔑 **El orden importa:** el paso 3 es el que libera la interfaz, y el 5 es el que
+añade el camino nuevo. Separarlos permite **probar la refactorización con SMTP
+funcionando** (paso 2-3) antes de meter una variable nueva y una API externa. Si
+algo falla en el paso 8, el culpable se sabe con exactitud.
+
+#### 9. ⚠️ Lo que NO se resuelve con este cambio
+
+| # | Pendiente | Por qué queda fuera |
+|---|---|---|
+| 1 | 🔴 **`forgotPassword` revela qué correos existen** | `AuthImpl.java:93` lanza `UserException` si el correo no está registrado. Permite **enumerar cuentas**. Debería responder siempre igual y enviar el correo solo si el usuario existe. **Es el defecto más serio del módulo** y es ortogonal a Resend |
+| 2 | **Fallo hacia arriba** | Si la API falla, la excepción sube y el endpoint devuelve error. Lo correcto: registrar y responder como si nada (el usuario no puede arreglar un problema de red) |
+| 3 | **Sin límite de intentos** | Nada impide pedir recuperación en bucle y gastar cuota. Es denegación de servicio + correo no deseado. Se resuelve limitando por IP o correo |
+| 4 | **Texto plano** | Hoy es `SimpleMailMessage`. Con Resend el `html` es nativo. Mejora **cosmética**, no necesaria |
+| 5 | **`to` es una LISTA** | `"to": ["..."]`, no un texto. Como cadena suelta la API responde **422** y no sale nada |
+
+#### 10. Verificación (aún NO ejecutada — es el plan)
+
+- `mvnw test -Dtest='!ComprasApplicationTests'` → debe seguir en **294/294**.
+  🔑 **`AuthImpl` no tiene test unitario hoy.** El cambio de 2 líneas de §4.2 no
+  está cubierto por la suite: es el punto que más conviene cubrir al implementar
+  (con un mock de `EmailSender`, que solo es posible **gracias a la interfaz**).
+- **2 pruebas manuales en local**: SMTP (modo actual) y Resend (`onboarding@`).
+- **2 en Railway**: correo a un Gmail **ajeno** al proyecto (revisar spam) y
+  verificar que el enlace del correo apunta al frontend real.
+- **Prueba negativa**: `MAIL_PROVIDER` mal escrito → la app **debe fallar al
+  arrancar** (§6). Si arranca, el selector no está funcionando.
+
+**Pendientes / debilidades conocidas de este plan**
+
+1. ⚠️ **El nombre de la interfaz** (`EmailSender`) no sigue la convención
+   (`EmailService`). Aceptado a propósito (§2, decisión 2).
+2. ⚠️ **No hay tests de `AuthImpl`**: el punto más delicado del cambio es también
+   el que hoy está sin cubrir.
+3. ⚠️ **`EmailService` usa `@Value("${spring.mail.username}")` en el
+   constructor.** Con la interfaz, ese `@Value` debe pasar a la clase SMTP: si el
+   bean SMTP es condicional, **`@Value` en el constructor solo se resuelve si el
+   bean se crea**. Es la forma más fácil de que el modo Resend rompa algo que en
+   SMTP funcionaba.
+4. ⚠️ **Dependencia de un tercero**: si Resend cae, no hay correo. El respaldo
+   SMTP (paso 9) lo cubre.
+
+---
 
 ### 2026-10-04 (2) — V7: ningún campo obligatorio se guarda como NULL
 
@@ -1055,6 +1269,8 @@ tocar nada. Si se confirman como opcionales, no hay que rehacer este código.
 ## Pendientes / issues conocidos
 
 - 🔜 **Fases 2-8 de `docs/PLAN.md`** (lo siguiente: Fase 2 = Platillos + Insumos + Recetas). Antes de escribir código nuevo, leer la entrada del 2026-09-30 de arriba.
+- 🔜 **Migrar el correo de recuperación a Resend** (Railway Hobby bloquea SMTP). **Opción B decidida, NADA implementado todavía**: interfaz `EmailSender` + SMTP + Resend con selector `app.mail.provider`. Leer la entrada del **2026-10-07** completa antes de tocar una línea: avisa de la trampa de los `${MAIL_USERNAME}` sin default (rompe el arranque si se comentan) y de que `AuthImpl` cambia en **2 líneas**, no se comenta.
+- 🔴 **Defecto de seguridad abierto en `AuthImpl.java:93`**: `forgotPassword` lanza `UserException` si el correo no está registrado, lo que permite **enumerar qué correos existen**. Es ortogonal a Resend y hay que tratarlo aparte.
 - ✅ ~~SKU/Barcode duplicado devuelve 500~~ → **resuelto** (409). Ver sesión 2026-09-28.
 - ✅ ~~Doble Enter cobra dos veces~~ → **resuelto en V6** (clave de idempotencia + índice UNIQUE). Ver sesión 2026-10-04 y el PDF 07. Requisito: el cliente debe mandar la clave; sin ella la venta se crea normal (compatibilidad con clientes viejos).
 - ⚠️ **`/ping` sigue sin existir** — no usarlo como healthcheck de Railway.
