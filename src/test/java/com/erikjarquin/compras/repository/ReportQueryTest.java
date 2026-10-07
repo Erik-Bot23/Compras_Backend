@@ -121,6 +121,7 @@ class ReportQueryTest {
         detail.setSale(sale);
         detail.setProduct(product);
         detail.setQuantity(quantity);
+        //REVISAR ESTA LÍNEA: el total de la venta se reparte entre las unidades vendidas
         detail.setUnitPrice(total.divide(BigDecimal.valueOf(quantity), 2));
         detail.setUnitCost(unitCost);
         detail.setSubTotal(total);
