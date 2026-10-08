@@ -12,17 +12,16 @@ import com.erikjarquin.compras.model.dto.Cash.OpenCashRequest;
 /**
  * Contrato de la caja registradora.
  *
- * <p><b>Modelo V4: cajas y turnos son dos cosas.</b> Un negocio tiene pocas cajas
+ * Modelo V4: cajas y turnos son dos cosas. Un negocio tiene pocas cajas
  * físicas y muchos turnos, así que el modelo separa:
- * <ul>
- *   <li>{@code cash_boxes}: las cajas FÍSICAS del local. Se registran con
- *       {@link #createBox} y se editan con {@link #updateBox}. Se dan de baja
- *       con {@link #desactiveBox}, nunca se borran.</li>
- *   <li>{@code cash_registers}: los TURNOS. Se crean con {@link #open} y se
- *       cierran con {@link #close}. Una misma caja puede tener muchos.</li>
- * </ul>
+ * 
+ * {@code cash_boxes}: las cajas FÍSICAS del local. Se registran con
+ * {@link #createBox} y se editan con {@link #updateBox}. Se dan de baja
+ * con {@link #desactiveBox}, nunca se borran.
+ * {@code cash_registers}: los TURNOS. Se crean con {@link #open} y se
+ * cierran con {@link #close}. Una misma caja puede tener muchos.
  *
- * <p>Antes (V3) estas dos ideas vivían en una sola tabla y por eso una caja se
+ * Antes estas dos ideas vivían en una sola tabla y por eso una caja se
  * podía abrir una sola vez: su número era UNIQUE. Ese error de modelo es
  * precisely lo que V4 corrige.
  *

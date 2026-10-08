@@ -18,7 +18,7 @@ import com.erikjarquin.compras.model.dto.ResetPassword.ChangePasswordRequest;
 import com.erikjarquin.compras.model.entity.UserEntity;
 import com.erikjarquin.compras.repository.UserRepository;
 import com.erikjarquin.compras.service.AuthService;
-import com.erikjarquin.compras.service.EmailService;
+import com.erikjarquin.compras.service.EmailSender;
 
 /**
  * Implementación del módulo de AUTH:
@@ -34,7 +34,7 @@ public class AuthImpl implements AuthService {
     private final UserRepository repo;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
-    private final EmailService emailService;
+    private final EmailSender emailService;
 
     @Value("${app.frontend-url}") //
     private String frontendUrl;
@@ -43,7 +43,7 @@ public class AuthImpl implements AuthService {
         UserRepository repo, 
         PasswordEncoder passwordEncoder,
         JwtUtil jwtUtil,
-        EmailService emailService){
+        EmailSender emailService){
         this.repo=repo;
         this.passwordEncoder=passwordEncoder;
         this.jwtUtil=jwtUtil;

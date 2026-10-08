@@ -65,7 +65,7 @@ spring:
       # a "validate": las tablas las crea SOLO Flyway (V1__init.sql) y Hibernate
       # nada más valida que coinciden → define JPA_DDL_AUTO=validate en el entorno.
       #   Local   : JPA_DDL_AUTO=update (default)  ·  Supabase: JPA_DDL_AUTO=validate
-      ddl-auto: ${JPA_DDL_AUTO:validate} #update
+      ddl-auto: ${JPA_DDL_AUTO:update} #validate
     # false en producción (evita exponer SQL con datos en logs).
     # true por defecto para tu desarrollo local.
     show-sql: ${SHOW_SQL:true}
@@ -75,10 +75,13 @@ spring:
 
   mail:
     # SMTP de Gmail con credenciales desde variable/env (nunca hardcodeadas).
+    #Los defaults vacíos, los : al final de ${MAIL_USERNAME:} son a propósito:
+    #sin ellos, si MAIL_USERNAME no existe en el entorno, Spring no resuelve 
+    #el placeholder y la app no arranca.
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME}
-    password: ${MAIL_PASSWORD}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
     properties:
       mail:
         smtp:
@@ -91,6 +94,13 @@ app:
   #   Local      : http://localhost:4200
   #   Netlify    : https://tu-app.netlify.app   → via FRONTEND_URL
   frontend-url: ${FRONTEND_URL:http://localhost:4200}
+
+  mail:
+    provider: ${MAIL_PROVIDER:smtp}
+    api-url: ${RESEND_API_URL:https://api.resend.com}
+    api-key: ${RESEND_API_KEY:}
+    from: ${RESEND_FROM:}
+
   # Control del SEED inicial de roles/permisos/admin (bootstraps).
   #   true  (default) : crea roles si la tabla está vacía, crea permisos
   #                     faltantes, crea el admin inicial y reasigna permisos.

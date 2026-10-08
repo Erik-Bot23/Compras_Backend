@@ -296,4 +296,15 @@ public class GlobalExceptionHandler {
         public String getCode() { return code; }
         public String getMessage() { return message; }
     }
+
+    /**
+     * Fallo al entregar el correo (SMTP o API HTTPS). 503: lo que no está
+     * disponible es el servicio de correo, no el backend entero
+     */
+    @ExceptionHandler(EmailDeliveryException.class)
+    public ResponseEntity<ErrorResponse> handleEmailDelivery(EmailDeliveryException e){
+        log.error("No se pudo entregar el correo de recuperación: {}", e.getMessage());
+        return buildErrorResponse(e.getStatus(), "EMAIL_ERROR", e.getMessage());
+    }
+
 }

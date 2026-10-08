@@ -34,7 +34,7 @@ public interface SaleService {
     /**
      * Venta ya registrada con esta clave de idempotencia, o vacío (V6).
      *
-     * <p>No la usa el usuario: la usa el controlador como red de seguridad para
+     * No la usa el usuario: la usa el controlador como red de seguridad para
      * el caso en que dos peticiones del mismo cobro se cruzan. Ver el comentario
      * de {@code SaleController#processSale}.
      *
