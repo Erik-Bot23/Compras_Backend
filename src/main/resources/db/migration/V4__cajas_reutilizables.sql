@@ -105,7 +105,7 @@ WHERE b.number = c.number
 -- Si algún corte quedó sin caja (número raro), se crea una para que ninguno
 -- quede huérfano: un corte sin caja no se podría mostrar en ningún reporte.
 --
--- ⚠️ "SELECT ... WHERE EXISTS" sin FROM es válido en PostgreSQL: es un SELECT de
+-- "SELECT ... WHERE EXISTS" sin FROM es válido en PostgreSQL: es un SELECT de
 -- una sola fila que solo se materializa si la condición se cumple.
 INSERT INTO public.cash_boxes (number, description, active, created_at)
 SELECT 'CAJA SIN ASIGNAR',
@@ -128,7 +128,7 @@ WHERE c.cash_box_id IS NULL;
 --  Este es EL cambio de la migración. Sin esto, el segundo turno del día con la
 --  misma caja daría 409.
 --
--- ⚠️ EL NOMBRE DEL CONSTRAINT: V3 lo creó como "cash_registers_number_key" (con
+-- EL NOMBRE DEL CONSTRAINT: V3 lo creó como "cash_registers_number_key" (con
 -- "registers" en plural, que es el nombre de la TABLA). La versión anterior de
 -- este archivo.drop "cash_register_number_key" (en singular), que NO existe: el
 -- DROP se iba sin hacer nada, el UNIQUE sobrevivía, y el 409 seguiría
