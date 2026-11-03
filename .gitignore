@@ -64,3 +64,5 @@ __pycache__/
 
 AGENTS.md
 docs/PLAN.md
+
+/target_test-classes/

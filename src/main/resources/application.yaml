@@ -26,8 +26,8 @@ spring:
   flyway:
     placeholder-replacement: false
 
-  # Perfil activo por defecto: "local". Así, al arrancar en tu máquina se carga
-  # application-local.yaml (que contiene tus credenciales reales de dev).
+  # Perfil activo por defecto: "local". Así, al arrancar carga
+  # application-local.yaml (que contiene las credenciales reales de dev).
   # En Railway ese archivo NO existe, así que las variables se toman desde el
   # entorno de Railway directamente.
   profiles:
@@ -42,11 +42,11 @@ spring:
     # y clave vienen de ${DB_USER} / ${DB_PASSWORD} (en application-local.yaml o
     # en las variables de entorno de Railway/Supabase).
     #
-    # CAMBIAR DE LOCAL A SUPABASE (edita application-local.yaml, no este archivo):
+    # CAMBIAR DE LOCAL A SUPABASE (se edita application-local.yaml, no este archivo):
     #   DB_HOST=<host del Dashboard>  DB_PORT=5432  DB_NAME=postgres
     #   DB_USER=postgres  DB_PASSWORD=<password real>  DB_SSLMODE=require
     # Los defaults de aquí (localhost/compras_db/disable) son SOLO para local.
-    # los prepared statements chocando con el pooler de Supabase
+
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:compras_db}?sslmode=${DB_SSLMODE:disable}&prepareThreshold=0
     username: ${DB_USER}
     password: ${DB_PASSWORD}
@@ -60,7 +60,7 @@ spring:
   jpa:
     hibernate:
       # update (dev local): Hibernate crea/actualiza las tablas automáticamente
-      # En supabase cambiar a "validate": las tablas las crea SOLO Flyway (V1__init.sql) y Hibernate
+      # En supabase cambiar a "validate": las tablas las crea SOLO Flyway (V1__init.sql) e Hibernate
       # nada más valida que coinciden -> define JPA_DDL_AUTO=validate en el entorno.
       #   Local: JPA_DDL_AUTO=update (default), Supabase: JPA_DDL_AUTO=validate
       ddl-auto: ${JPA_DDL_AUTO:validate} #update

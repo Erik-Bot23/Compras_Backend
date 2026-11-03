@@ -1,6 +1,6 @@
 -- ============================================================================
 --  V6__ventas_idempotencia.sql
---  2026-10-01 · Que un doble "Enter" NO cobre dos veces.
+--  Que un doble "Enter" NO cobre dos veces.
 --
 --  El problema
 --  ----------

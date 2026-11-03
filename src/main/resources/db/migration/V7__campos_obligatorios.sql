@@ -1,33 +1,27 @@
 -- ============================================================================
 --  V7__campos_obligatorios.sql
---  2026-10-04 · Que ningún campo obligatorio se guarde como NULL.
---
---  El encargo
---  ----------
---  "Que no se guarden los campos como null": nombre de categoría, nombre de
---  usuario, correo, contraseña, nombre de rol, SKU, barcode, nombre de
---  proveedor y RFC de proveedor.
+--  Que ningún campo obligatorio se guarde como NULL.
 --
 --  Qué estaba protegido y qué no
 --  -----------------------------
 --  Antes de este trabajo, la respuesta fue desigual según el módulo:
 --
---    · Categoría, rol, proveedor  -> TRES capas: validador imperativo,
+--    · Categoría, rol, proveedor -> TRES capas: validador imperativo,
 --      @Column(nullable=false) y NOT NULL en la base. Ya estaban bien.
 --
---    · Usuario (nombre, correo)   -> lo frenaba el NOT NULL de la base, pero
+--    · Usuario (nombre, correo) -> lo frenaba el NOT NULL de la base, pero
 --      no había validación propia. Y el error que devolvía la base era un 409
 --      que decía "el dato ya existe", que no era lo que pasaba.
 --
---    · Usuario (contraseña)       -> SIN NADA. Y aquí lo grave: BCrypt hashea
+--    · Usuario (contraseña) -> SIN NADA. Y aquí lo grave: BCrypt hashea
 --      la cadena vacía sin quejarse, así que una contraseña en blanco SÍ se
 --      guardaba. El usuario quedaba creado y con una fila en la base, pero
 --      después no podía iniciar sesión jamás (matches("", hash) devuelve false
 --      siempre). Un dato basura y un soporte sin explicación.
 --
---    · SKU y barcode              -> opcionales POR DECISIÓN (2026-09-28):
+--    · SKU y barcode:
 --      las columnas permitían NULL y el validador devolvía null. Ahora pasan a
---      obligatorios (ver abajo por qué se revierte esa decisión).
+--      obligatorios.
 --
 --  Por qué SKU y barcode ahora son obligatorios
 --  ---------------------------------------------
@@ -53,32 +47,8 @@
 --  solo después restringe.
 -- ============================================================================
 
--- ----------------------------------------------------------------------------
---  1. Relleno de lo que ya estaba vacío (solo si falta)
--- ----------------------------------------------------------------------------
---
---  REGLA DE ORO: esta migración NUNCA pisa un valor que ya existe. Solo
---  escribe donde no hay nada. Si mañana se corre sobre una base con todos los
---  SKUs puestos, estas sentencias no cambian ni un solo dato.
---
---  Los valores inventados son códigos INTERNOS y se distinguen a propósito:
---
---   · SKU     -> PEND-SKU-<id>       ("pendiente de SKU, id 14")
---   · barcode -> 20 + 12 dígitos     (prefijo 20 reservado a códigos internos
---                                      de tienda; los EAN de fábrica empiezan
---                                      por 750, 789, 737...)
---
---  El prefijo 20 es el rango que GS1 reserva para retail interno, así que un
---  código que empiece por 20 NO colisiona con un barcode real de proveedor. Es
---  la razón de elegirlo: si alguien escanea este producto con una terminal,
---  el código no se confunde con nada externo.
---
---  ESTOS VALORES SON PROVISIONALES. El dueño del negocio debería
---  reemplazarlos por los SKU y códigos de barras reales del producto. Hasta
---  entonces el producto queda identificable y cobrable, que era el problema.
---
 --  ----------------------------------------------------------------------------
---  LAS TRES FORMAS DE "VACÍO" (y por qué son tres y no una)
+--  LAS TRES FORMAS DE "VACÍO"
 --  ----------------------------------------------------------------------------
 --  La comprobación no es solo "IS NULL". Hay tres maneras distintas en que un
 --  campo obligatorio llega vacío, y cada una se cuela por un lado distinto:
@@ -88,7 +58,7 @@
 --                      campo en blanco. Para una columna NOT NULL son valores
 --                      VÁLIDOS: la base los acepta sin quejarse.
 --    3. 'NULL'      -> el texto literal. Se encontró uno así al revisar la base
---                      (producto "Leche 3"): alguien guardó la palabra NULL
+--                      (producto "Leche 3"): si alguien guarda la palabra NULL
 --                      como si fuera el dato. Para la base es una cadena
 --                      perfectamente normal de 4 caracteres, y el NOT NULL la
 --                      acepta igual. Es el peor de los tres porque parece
@@ -96,7 +66,7 @@
 --
 --  Por eso las tres se comparan con upper(btrim(...)): si solo se mirara
 --  "IS NULL", los casos 2 y 3 pasarían inadvertidos y el producto quedaría
---  guardado igual, que es exactamente lo que se pidió evitar.
+--  guardado igual.
 --
 --  SKU primero
 UPDATE public.products
@@ -111,9 +81,7 @@ UPDATE public.products
 --  identificador de texto, y '20' + lpad(id) da siempre 14 dígitos. Si se
 --  hiciera '20' || id, el producto 5 tendría un código de 3 dígitos y el 500 uno
 --  de 5, y un lector que espera ancho fijo los leería distinto.
---
---  El rango posible es 20 000 000 000 01 .. 20 000 000 999 99: cabe en los 20
---  dígitos de la columna y del validador, y no se solapa con el UNIQUE.
+
 UPDATE public.products
     SET barcode = '20' || lpad(id::text, 12, '0')
     WHERE barcode IS NULL
@@ -121,7 +89,7 @@ UPDATE public.products
        OR upper(btrim(barcode)) = 'NULL';
 
 -- ----------------------------------------------------------------------------
---  2. Ahora sí: NOT NULL
+--  2. NOT NULL
 -- ----------------------------------------------------------------------------
 --
 --  ProductEntity: se cambia @Column(unique = true) por
@@ -134,12 +102,12 @@ ALTER TABLE public.products
 
 -- ----------------------------------------------------------------------------
 -- ----------------------------------------------------------------------------
---  3. Comprobación final (si algo quedó sin rellenar, esto avisa)
+--  3. Comprobación final 
 -- ----------------------------------------------------------------------------
 --
 --  La condición no puede ser "NOT NULL" a secas: el NOT NULL ya está puesto
 --  en el paso 2 y por lo tanto siempre es cierto. Lo que se verifica aquí es lo
---  OPPOSTO: que no queden cadenas VACÍAS ni el texto 'NULL'.
+--  opuesto: que no queden cadenas VACÍAS ni el texto 'NULL'.
 --
 --  Esto es lo que un NOT NULL NO atrapa. La cadena vacía, la de tres espacios y
 --  la palabra 'NULL' son valores perfectamente válidos para una columna NOT
@@ -148,7 +116,7 @@ ALTER TABLE public.products
 --  si algo se colara, salga un mensaje que dice QUÉ hacer en vez de un error
 --  técnico de PostgreSQL.
 --
---  No se añade un CHECK (que también losatraparía en la base) a propósito: un CHECK
+--  No se añade un CHECK a propósito: un CHECK
 --  sobre texto tiene que crecer con cada regla de formato (solo dígitos,
 --  longitud, etc.) y esa lista ya vive mejor en InputValidator, que además da
 --  mensajes en español que el usuario puede entender.

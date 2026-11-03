@@ -1,13 +1,6 @@
 -- ============================================================================
 --  V4__cajas_reutilizables.sql
---  2026-10-01 · Un negocio tiene POCAS cajas físicas y MUCHOS turnos.
---
---  El problema que resuelve
---  -----------------------
---  V3 decidió que "una caja se abre UNA sola vez", porque cash_registers.number
---  era UNIQUE y una fila por caja parecía lo correcto. Pero el dueño aclaró el
---  modelo real: en el local hay DOS cajas (CAJA 1 y CAJA 2) y se abren y
---  cierran VARIAS VECES, en distintos días de la semana.
+--  Un negocio tiene POCAS cajas físicas y MUCHOS turnos.
 --
 --  Con el UNIQUE, la segunda vez que se abría "CAJA 1" daba 409. Ese día no
 --  había forma de volver a abrir la caja que sí existía.
@@ -48,12 +41,6 @@ CREATE TABLE IF NOT EXISTS public.cash_boxes (
 -- declara CashBoxEntity en Java. Si aquí fueran más cortos, Hibernate valida el
 -- esquema al arrancar (ddl-auto=validate en producción) y la app no levanta.
 
-COMMENT ON TABLE public.cash_boxes IS
-    'Registro de las CAJAS FISICAS del local (CAJA 1, CAJA 2, ...). '
-    'Una caja se puede abrir y cerrar muchas veces: cada apertura crea una fila en cash_registers';
-
--- ESTA ES LA LÍNEA QUE ROMPIÓ EL ARRANQUE (la 20 de la versión anterior).
---
 -- Se escribió "COMMENT ON TABLE ... cash_boxes.number", pero eso le dice a
 -- PostgreSQL que la tabla se llama "number" DENTRO del esquema "cash_boxes".
 -- De ahí el error: cross-database references are not implemented.
@@ -135,7 +122,7 @@ WHERE c.cash_box_id IS NULL;
 -- apareciendo al reabrir una caja. Es el bug más silencioso de esta migración,
 -- porque no da ningún error: simplemente no hace nada.
 --
---  El IF EXISTS protege solo contra typos, NO contra el nombre equivocado. Por
+--  El IF EXISTS protege solo contra tipos, NO contra el nombre equivocado. Por
 --  eso el nombre se copió literal de V3 (línea 146) en vez de escribirse de
 --  memoria.
 ALTER TABLE public.cash_registers

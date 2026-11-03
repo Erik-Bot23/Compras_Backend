@@ -1,9 +1,6 @@
 -- ============================================================================
 --  V5__ventas_usuario_y_usuarios_fechas.sql
---  2026-10-01 · Dos agregados que hacen falta para poder buscar registros.
---
---  Por qué existe
---  -------------
+
 --  1) sales.user_id — "quién vendió"
 --
 --     Una venta solo apuntaba al TURNO (cash_register_id), no a la persona. Eso

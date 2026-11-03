@@ -739,10 +739,3 @@ ALTER TABLE ONLY public.sale_details
     ADD CONSTRAINT fkqvh82ispfukxa2yssnok0m12o FOREIGN KEY (product_id) REFERENCES public.products(id);
 
 
--- Completed on 2026-09-24 13:00:06
-
---
--- PostgreSQL database dump complete
---
-
-

@@ -1,10 +1,6 @@
 # ============================================================================
 #  Dockerfile de Compras-Backend (build multi-etapa)
 # ----------------------------------------------------------------------------
-#  Por qué multi-etapa: Railway construye el contenedor desde este Dockerfile
-#  en un entorno limpio donde NO existe target/*.jar. La primera etapa compila
-#  con Maven dentro de la imagen y la segunda solo copia el .jar resultante,
-#  dejando la imagen final ligera (sin Maven ni dependencias de build).
 #
 #  VARIABLES DE ENTORNO: no se exponen aquí. Los secretos se inyectan en tiempo
 #  de ejecución con las Variables de Railway (DB*, JWT_SECRET, etc.).

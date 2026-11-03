@@ -1,8 +1,6 @@
 -- ============================================================================
 --  V3__compras_confirmadas_costo_y_cajas.sql
 -- ----------------------------------------------------------------------------
---  POR QUE ESTA MIGRACION EXISTE (3 cambios del mismo encargo)
--- ----------------------------------------------------------------------------
 --  1) CONFIRMACION DE COMPRAS
 --     Hoy POST /purchases suma el stock y guarda el costo INMEDIATAMENTE. No
 --     hay forma de registrar una compra "en transito" sin que ya afecte al
@@ -24,19 +22,19 @@
 --     sale_details guardaba unit_price (lo que se COBRO) pero NO el costo del
 --     producto al momento de la venta. Cualquier reporte de utilidad tenia
 --     que usar products.cost, que es el costo del ULTIMO purchase HOY, no el
---     del dia que se vendio: comprar algo mas barato manana reescribia la
+--     del dia que se vendio: comprar algo mas barato mañaana reescribia la
 --     ganancia de ayer.
 --
 --     Fix: sale_details.unit_cost guarda el costo CONGELADO al vender. Es el
 --     mismo patron que ya usa la venta con unit_price: si el costo del
---     producto cambia manana, la venta de ayer conserva lo que ocurrio.
+--     producto cambia mañaana, la venta de ayer conserva lo que ocurrio.
 --
 --  3) CAJAS NUMERADAS
 --     cash_registers no tenia numero. Se le agrega `number`, que es lo que el
 --     vendedor escribe al abrir la caja y lo que despues permite filtrar por
 --     caja en Reportes y ver las ventas de cada una.
 --
---  NOTA DE ALCANCE (decidido el 2026-09-30): se mantiene la regla de UNA sola
+--  NOTA DE ALCANCE: se mantiene la regla de UNA sola
 --  caja activa a la vez. Este cambio NO habilita varias cajas simultaneas.
 -- ============================================================================
 
@@ -47,8 +45,7 @@
 --  confirmed NOT NULL DEFAULT false -> las compras nuevas nacen PENDIENTES.
 --
 --  BACKFILL (critico, no opcional): las compras que YA EXISTEN en esta base de
---  datos tienen su stock YA SUMADO (lo hizo POST /purchases entre el 2026-09-13
---  y el 2026-09-30, ver PurchaseImpl.create). Si se dejaran en false, el
+--  datos tienen su stock YA SUMADO. Si se dejaran en false, el
 --  sistema diria "estas compras no han movido stock" cuando si lo movieron, y
 --  quedaria imposible distinguirlas de las nuevas. Por eso se marcan como
 --  CONFIRMADAS con confirmed_at = purchase_date: la fecha real en que
@@ -163,12 +160,6 @@ COMMENT ON COLUMN public.cash_registers.number IS
 --      number = 'CAJA 1', opened_at = NULL, opening_amount = NULL, active = false
 --  y las columnas de totales en 0. Se distingue de una caja CERRADA porque esa
 --  tiene opened_at NOT NULL y closed_at NOT NULL.
---
---  CONSECUENCIA DE DISENO (importante): una caja se puede abrir UNA sola vez.
---  El numero es UNIQUE, o sea una fila por caja fisica, y reabrir "CAJA 1"
---  mezclaria dos turnos distintos en el mismo corte y el reporte por caja
---  mostraria una venta de manana junto a una de la tarde como si fueran del
---  mismo turno. Para un turno nuevo se crea "CAJA 2".
 
 -- ----------------------------------------------------------------------------
 --  3c) cash_registers.difference_reason: por que se cerro con descuadre
@@ -190,10 +181,9 @@ COMMENT ON COLUMN public.cash_registers.difference_reason IS
 -- ----------------------------------------------------------------------------
 --  3d) purchase_details.unit_price: el precio de VENTA del renglón
 -- ----------------------------------------------------------------------------
---  Cambio de regla de negocio (decision del 2026-09-30, punto 3 del encargo):
+--  Cambio de regla de negocio:
 --  hasta V2 el modulo de compras NUNCA escribia product.price, porque el precio
---  de venta seconsidered "decision comercial del dueño" y no debia cambiar solo
---  porque el proveedor cobro mas caro. El dueño aclaro el flujo real:
+--  de venta no debia cambiar solo porque el proveedor cobro mas caro. 
 --
 --      al crear el producto por 1a vez da su precio de VENTA;
 --      al reponer stock compra al proveedor y escribe el precio de VENTA de ese
@@ -204,12 +194,7 @@ COMMENT ON COLUMN public.cash_registers.difference_reason IS
 --  siendo tablas separadas: el precio queda historizado en el renglón, y el
 --  producto solo guarda el VIGENTE. Por eso el reporte de margenes (que compara
 --  products.cost contra products.price) refleja el ultimo precio confirmado.
---
---  NULLABLE A PROPOSITO: NULL significa "esta compra noopiniona sobre el precio
---  de venta". Es lo que hace que el cambio sea compatible con las compras ya
---  registradas y con los clientes que no llenen el campo: se deja el precio
---  que ya tiene el producto. Con NOT NULL seria imposible distinguir "no
--- opiniono" de "lo puse en 0".
+
 
 ALTER TABLE public.purchase_details
     ADD COLUMN IF NOT EXISTS unit_price numeric(38,2);
@@ -229,9 +214,6 @@ COMMENT ON COLUMN public.purchase_details.unit_price IS
 --  recrearlo con la lista nueva. Se reescribe con IN (...), que es mucho mas
 --  legible que la forma = ANY(ARRAY[...]) que genera pg_dump. El nombre del
 --  constraint se mantiene para que una posible reversion manual use el mismo.
---
---  La lista de 37 nombres se DERIVO de la de V2 (36) agregando este, para no
---  poder perder ninguno por un error de dedo.
 
 ALTER TABLE public.permissions DROP CONSTRAINT IF EXISTS permissions_name_check;
 
@@ -286,14 +268,10 @@ COMMENT ON CONSTRAINT permissions_name_check ON public.permissions IS
 --  Idempotente (INSERT ... SELECT ... WHERE NOT EXISTS): si la fila ya existe
 --  porque PermissionBootstrap ya corrio, la migracion no falla.
 --
---  Va AQUI y no en RolePermissionBootstrap porque ese bootstrap es seed inicial
---  a proposito (decision del 2026-09-17): si un rol base ya tiene al menos un
+--  Va AQUI y no en RolePermissionBootstrap porque ese bootstrap es seed inicial: 
+--  si un rol base ya tiene al menos un
 --  permiso, no toca nada. En una BD ya sembrada un permiso nuevo nunca llegaria
 --  solo a los roles. En la migracion es explicito, versionado y corre una vez.
---
---  ALMACENISTA (y no CAJERO) porque confirmar una compra es una operacion de
---  almacen: es quien recibe y cuenta la mercaderia. El cajero no deberia poder
---  sumar stock al inventario.
 
 INSERT INTO public.permissions (name)
 SELECT 'CONFIRMAR_COMPRAS'

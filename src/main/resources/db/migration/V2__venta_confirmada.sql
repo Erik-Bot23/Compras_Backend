@@ -1,10 +1,6 @@
 -- ============================================================================
 --  V2__venta_confirmada.sql
--- ----------------------------------------------------------------------------
---  POR QUÉ ESTA MIGRACIÓN EXISTE
 --  ----------------------------------------------------------------------------
---  Problema detectado el 2026-09-30 (inconsistencia de inventario):
---
 --    1. Una COMPRA suma stock al producto  (PurchaseImpl.create)
 --    2. Una VENTA  resta stock al producto (SaleImpl.processSale)
 --    3. CANCELAR la compra volvía a restar stock (PurchaseImpl.cancel)
@@ -37,8 +33,6 @@
 --  Con `validate` Hibernate COMPRUEBA que el esquema coincide con las entidades
 --  pero NUNCA crea columnas. Agregar un campo a SaleEntity sin esta migración
 --  haría fallar el arranque con "Schema-validation: missing column".
---  Ésta es exactamente la transición que se hizo el 2026-09-23: el esquema
---  pasa a ser responsabilidad de Flyway, no de Hibernate.
 --
 --  LECCIÓN SOBRE CHECK CONSTRAINTS (el problema clásico de este proyecto):
 --  La tabla `permissions` tiene un CHECK que fija la lista EXACTA de nombres
@@ -49,12 +43,11 @@
 --  el INSERT del bootstrap revienta con "violates check constraint".
 -- ============================================================================
 
-
 -- ----------------------------------------------------------------------------
 -- 1) sales: los 4 campos del ciclo de vida de la venta
 -- ----------------------------------------------------------------------------
 --  confirmed / cancelled son INDEPENDIENTES (no un enum) a propósito:
---  un enum obligaría a un 5º estado del tipo PaymentStatus, y PaymentStatus
+--  un enum obligaría a un 5to estado del tipo PaymentStatus, y PaymentStatus
 --  describe el PAGO (¿se cobró?, ¿se revirtió?), no el ESTADO DE LA VENTA
 --  (¿sigue abierta?, ¿el cliente ya se la llevó?). Son dos ejes distintos:
 --  una venta con tarjeta APROBADA puede estar CANCELADA (se devolvió el dinero).
@@ -90,8 +83,8 @@ COMMENT ON COLUMN public.sales.cancelled_at IS
 -- ----------------------------------------------------------------------------
 -- 2) permissions: 2 permisos nuevos -> el enum pasa de 34 a 36
 -- ----------------------------------------------------------------------------
---  CONFIRMAR_VENTAS -> "Cerrar" la venta en el POS. Es la acción que la
---                       KITCHEN/mostrador ejecuta cuando el pedido ya salió.
+--  CONFIRMAR_VENTAS -> "Cerrar" la venta en el POS. Es la acción que
+--                       mostrador ejecuta cuando el pedido ya salió.
 --                       Congela la venta.
 --  CANCELAR_VENTAS  -> anular una venta NO confirmada (devuelve el stock).
 --
@@ -176,7 +169,7 @@ WHERE NOT EXISTS (SELECT 1 FROM public.permissions WHERE name = 'CANCELAR_VENTAS
 -- 4) Asignarlos a ADMIN y CAJERO
 -- ----------------------------------------------------------------------------
 --  POR QUÉ ESTO ESTÁ AQUÍ Y NO EN RolePermissionBootstrap:
---  ese bootstrap es "seed inicial" a propósito (decisión 2026-09-17): si un rol
+--  ese bootstrap es "seed inicial" a propósito: si un rol
 --  base ya tiene AL MENOS un permiso, no toca nada, para respetar la gestión
 --  manual. Consecuencia: un permiso nuevo NO llega solo a los roles en una BD
 --  ya sembrada. Ponerlo en la migración lo hace explícito, versionado y que

@@ -1,6 +1,6 @@
 # Compras-Backend
 
-Backend REST para el módulo de **compras** del sistema de ventas (alimentación).
+Backend REST para el módulo de **compras** del sistema de ventas.
 Spring Boot 4 · Java 21 · PostgreSQL · Spring Data JPA · Spring Security + JWT.
 
 > Proyecto hermano de `Compras-Frontend-Local` (Angular) y `Compras-Frontend-Cliente` (Next.js) (Angular 21 standalone + SSR). El
@@ -30,7 +30,7 @@ Spring Boot 4 · Java 21 · PostgreSQL · Spring Data JPA · Spring Security + J
   conservar histórico. Un producto con ventas/compras no se elimina físicamente (409).
 - **Categorías**: CRUD para clasificar productos.
 - **Ventas / POS**: ventas en efectivo o tarjeta (débito/crédito), historial.
-- **Pagos**: estados PENDING → PROCESSING → APPROVED / REJECTED / REVERSED,
+- **Pagos**: estados PENDING -> PROCESSING -> APPROVED / REJECTED / REVERSED,
   reintentos (máx 3), idempotencia, reversas y monitor automático cada 5 min.
 - **Caja**: apertura/cierre y corte de caja (resumen).
 - **Reportes**: agregación **en SQL** con DTOs: tendencia (día/mes/año), top
@@ -51,11 +51,11 @@ controller/ -> service/ (interfaz) -> service/impl/ -> repository/ -> model/enti
 ```
 
 - **12 controllers · 68 endpoints** bajo `/api/local/...`.
-- **37 permisos** en `PermissionName` (ver tabla de endpoints).
+- **37 permisos** en `PermissionName`.
 - Bootstraps de arranque (respetan `APP_SEED_BOOTSTRAPS`): `RoleBootstrap` →
-  `AdminBootstrap` → `PermissionBootstrap` → `RolePermissionBootstrap`. Siembran
+  `AdminBootstrap` -> `PermissionBootstrap` -> `RolePermissionBootstrap`. Siembran
   **solo si la BD está vacía** (no self-healing). Admin inicial:
-  `18jarquinsanchezerik1a@gmail.com` / `1234`.
+  `soportetiav@gmail.com` / `12345678`.
 - `PaymentMonitorJob` (`@Scheduled`, cada 5 min) resuelve pagos PENDING > 5 min.
 
 ## Prefijos de la API
@@ -67,7 +67,7 @@ tipo de usuario:
 |---|---|---|---|
 | `/api/local/**` | `Compras-Frontend-Local` (Angular, empleado) | POS y gestión: venta, cobro, caja, inventario, compras, proveedores, usuarios/roles/permisos, reportes | JWT de **empleado** + permiso (`@PreAuthorize`) |
 | `/api/tienda/**` | `Compras-Frontend-Cliente` (Next.js, cliente) | Catálogo, carrito, checkout, auth de cliente, pedidos | **Nace en la Fase 3.** El catálogo será público de solo lectura |
-| `/api/uploads/**` | Ambos | Imágenes de platillos/productos | **Público** (es contenido estático) |
+| `/api/uploads/**` | Ambos | Imágenes de productos | **Público** (es contenido estático) |
 
 `/api/uploads/**` NO se mueve bajo `/api/local` a propósito: el catálogo público
 del storefront tendrá que mostrar las mismas imágenes.
@@ -132,13 +132,13 @@ PAYMENT_TERMINAL_TYPE=SIMULATED
 ## Cómo ejecutar
 
 ```sh
-.\mvnw.cmd compile           # compilar
-.\mvnw.cmd test              # tests (requiere PostgreSQL local levantado)
-.\mvnw.cmd spring-boot:run   # arrancar la API
+.\mvn compile           # compilar
+.\mvn test              # tests (requiere PostgreSQL local levantado)
+.\mvn spring-boot:run   # arrancar la API
 ```
 
 Requisitos: JDK 21, PostgreSQL corriendo en `localhost:5432` con la BD
-`ventas_db`, y `application-local.yaml` con las credenciales.
+`compras_db`, y `application-local.yaml` con las credenciales.
 
 ## Tests
 
