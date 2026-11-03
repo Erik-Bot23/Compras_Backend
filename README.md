@@ -179,7 +179,7 @@ Compras-Backend/
     │   │   ├── service/           # interfaces + impl/
     │   │   ├── repository/        # Spring Data JPA
     │   │   ├── model/             # entity/, dto/, enums/
-    │   │   ├── mapper/            # entity ↔ DTO
+    │   │   ├── mapper/            # entity <-> DTO
     │   │   ├── exceptions/        # por módulo + handler global
     │   │   ├── jobs/              # monitoreo de pagos
     │   │   └── ComprasApplication.java
