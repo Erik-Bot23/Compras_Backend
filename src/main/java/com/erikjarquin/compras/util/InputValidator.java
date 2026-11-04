@@ -7,12 +7,6 @@ import java.util.regex.Pattern;
  * Validaciones de entrada compartidas por los módulos de productos, proveedores y
  * compras.
  *
- * Por qué una clase aparte y no repetir el código en cada servicio. Las
- * reglas nacieron de errores reales de captura ("1.875" en un stock, letras en un
- * precio, "CAJA 1" y "caja 1" contadas como dos cajas). Si cada servicio tiene
- * su versión, un día uno acepta y el otro no, y el que acepta es el que rompe los
- * datos. Aquí hay una sola definición de "qué es un barcode válido".
- *
  * Por qué se valida el TEXTO y no el número ya parseado. Es la clave de
  * este diseño. Al convertir a {@code BigDecimal}, {@code "000.2"} se vuelve
  * {@code 0.2} y {@code "1.875"} se vuelve {@code 1.875}: si validáramos después
@@ -20,10 +14,7 @@ import java.util.regex.Pattern;
  * las reglas mira primero la cadena, y solo después convierte.
  *
  * Los errores se lanzan como {@link IllegalArgumentException}, que
- * {@code GlobalExceptionHandler} traduce a 400. Es el mismo patrón que ya
- * usaba {@code PurchaseImpl.validateRequest}, y se prefirió aBean Validation
- * porque los mensajes pueden explicar por qué ("el stock no admite
- * decimales: no existe 1.6 de jabón") en vez de un "validation failed" genérico.
+ * {@code GlobalExceptionHandler} traduce a 400. 
  */
 public final class InputValidator {
 
@@ -79,14 +70,10 @@ public final class InputValidator {
     /**
      * Normaliza un código: recorta y pasa a MAYÚSCULAS.
      *
-     * Las mayúsculas son solo para <b>campos de código (SKU, RFC, barcode,
+     * Las mayúsculas son solo para campos de código (SKU, RFC, barcode,
      * número de caja, nombre de proveedor y categoría). No se aplican a los
      * nombres de producto ni a las descripciones: "Tacos de chicharrón" en
      * mayúsculas se lee peor y la búsqueda ya es insensible a mayúsculas.
-     *
-     * Además de la estética, la mayúscula fija evita duplicados: "cafe" y
-     * "CAFE" son el mismo producto escrito de dos formas, y sin normalizar el
-     * UNIQUE del SKU dejaría pasar dos productos que en realidad son uno.
      */
     public static String normalizarCodigo(String valor){
         if(valor == null){
@@ -108,10 +95,6 @@ public final class InputValidator {
      *   En PostgreSQL un {@code UNIQUE} admite varios NULL: con el
      *       SKU opcional se acumulaban productos sin SKU sin que nada lo
      *       indicara, y un producto nuevo heredaba esa ambigüedad.
-     *
-     * @throws IllegalArgumentException si viene vacío, si trae caracteres no
-     *                                  permitidos o si excede
-     *                                  {@link #MAX_SKU_LENGTH}
      */
     public static String sku(String valor){
         String codigo = requerido(normalizarCodigo(valor), "SKU");
