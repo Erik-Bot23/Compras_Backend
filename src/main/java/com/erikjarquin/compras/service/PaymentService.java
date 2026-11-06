@@ -5,7 +5,6 @@ import com.erikjarquin.compras.model.dto.Payment.CardPaymentResponse;
 
 /**
  * Contrato de pagos con tarjeta: cobro, consulta de estado, reintento y reversa.
- * Ver {@code service/impl/PaymentImpl}.
  */
 public interface PaymentService {
     CardPaymentResponse processCardPayment(CardPaymentRequest request);

@@ -8,7 +8,6 @@ import com.erikjarquin.compras.model.dto.Role.UpdateRoleRequest;
 
 /**
  * Contrato de operaciones sobre roles y su asignación de permisos.
- * Ver implementación en {@code service/impl/RoleImpl}.
  */
 public interface RoleService {
     List<RoleDto> getAllRoles();

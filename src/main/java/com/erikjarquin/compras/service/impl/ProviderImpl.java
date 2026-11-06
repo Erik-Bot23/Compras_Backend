@@ -20,7 +20,7 @@ import com.erikjarquin.compras.service.ProviderService;
  *
  * Reglas de negocio: nombre y RFC son obligatorios (400); RFC único (409);
  * no se puede borrar un proveedor que tenga compras (409, integridad del
- * histórico). No encontrado → 404 vía ProviderException por defecto.
+ * histórico). No encontrado -> 404 vía ProviderException por defecto.
  */
 @Service
 public class ProviderImpl implements ProviderService {
@@ -32,7 +32,7 @@ public class ProviderImpl implements ProviderService {
         this.purchaseRepository = purchaseRepository;
     }
 
-    //Listar proveedores (orden alfabético para los selects del frontend)
+    //Listar proveedores(orden alfabético para los selects del frontend)
     @Override
     public List<ProviderDto> getAll(){
         return repository.findAllByOrderByNameAsc()
@@ -121,8 +121,8 @@ public class ProviderImpl implements ProviderService {
      *
      * El nombre del proveedor sí va en mayúsculas (a diferencia del nombre de
      * los productos): es un dato corto, casi siempre una razón social, y en
-     * mayúsculas se ve uniforme en las tablas y evita que "Dairy Queen" y
-     * "DAIRY QUEEN" se guarden como dos proveedores distintos.
+     * mayúsculas se ve uniforme en las tablas y evita que "Juan Perez" y
+     * "JUAN PEREZ" se guarden como dos proveedores distintos.
      *
      * Recortar es lo importante: los espacios al final invisiblemente rompen
      * el UNIQUE del RFC cuando se busca por duplicado.

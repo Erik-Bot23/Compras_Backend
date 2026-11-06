@@ -7,7 +7,6 @@ import com.erikjarquin.compras.model.dto.Purchases.PurchaseRequest;
 
 /**
  * Contrato del módulo de COMPRAS (registro de mercancía y su detalle).
- * Ver {@code service/impl/PurchaseImpl}.
  */
 public interface PurchaseService {
     //Registrar una compra. Nace PENDIENTE: no suma stock ni cambia costo

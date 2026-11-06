@@ -17,8 +17,7 @@ import com.erikjarquin.compras.model.enums.ReportGroup;
 
 /**
  * Contrato del módulo de REPORTES: agregados SQL de ventas e inventario que
- * consume el dashboard del frontend (que solo grafica). Ver
- * {@code service/impl/ReportsImpl}.
+ * consume el dashboard del frontend (que solo grafica).
  */
 public interface ReportsService {
     List<PeriodSalesDTO> getSalesTrend(LocalDate from, LocalDate to, ReportGroup groupBy);
@@ -36,10 +35,10 @@ public interface ReportsService {
 
     ReportsSummaryDTO getSummary(LocalDate from, LocalDate to);
 
-    //V3: utilidad del periodo (ingresos menos costo de lo vendido)
+    //Utilidad del periodo (ingresos menos costo de lo vendido)
     ProfitDTO getProfit(LocalDate from, LocalDate to);
 
-    //V3: detalle de una caja (sus ventas y su utilidad) por id
+    //Detalle de una caja (sus ventas y su utilidad) por id
     CashReportDTO getCashReport(Long cashId);
 
     /**

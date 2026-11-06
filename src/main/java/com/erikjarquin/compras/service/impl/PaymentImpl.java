@@ -57,8 +57,8 @@ public class PaymentImpl implements PaymentService {
                         }
 
     //Procesar el pago
-    @Override //
-    @Transactional //
+    @Override
+    @Transactional 
     public CardPaymentResponse processCardPayment(CardPaymentRequest request){ 
         log.info("Procesando pago con tarjeta para la venta ID: {}", request.getSaleId());
 
@@ -143,13 +143,13 @@ public class PaymentImpl implements PaymentService {
     }
 
     /**
-     * Genera un transactionId único y determinista badado en el ID de la venta
+     * Genera un transactionId único y determinista basado en el ID de la venta
      */
     private String generateTransactionId(Long saleId){
         //Formato: TXN-{saleId}-{timestamp}-{uuid_corto}
-        String timestamp = String.valueOf(System.currentTimeMillis()); //currentTimeMillis():
-        String shortUuid = UUID.randomUUID().toString().substring(0, 8); //substring: 
-        return String.format("TXN-%d-%s-%s", saleId, timestamp, shortUuid); //format("TXN-%d-%s-%s"): 
+        String timestamp = String.valueOf(System.currentTimeMillis()); 
+        String shortUuid = UUID.randomUUID().toString().substring(0, 8);
+        return String.format("TXN-%d-%s-%s", saleId, timestamp, shortUuid);  
     }
 
     //Revisar el estado de la venta
@@ -162,15 +162,15 @@ public class PaymentImpl implements PaymentService {
         
         //Si está pendiente, consultar estado actual
         if(payment.getStatus() == PaymentStatus.PENDING){
-            TerminalResponse statuResponse = terminalService.getTransactionStatus(transactionId);
+            TerminalResponse statusResponse = terminalService.getTransactionStatus(transactionId);
 
             payment.setStatusQueried(true);
             payment.setLastStatusQuery(LocalDateTime.now());
 
-            if(statuResponse.isApproved()){
+            if(statusResponse.isApproved()){
                 payment.setStatus(PaymentStatus.APPROVED);
-                payment.setAuthorizationCode(statuResponse.getAuthorizationCode());
-                payment.setLastFourDigits(statuResponse.getLastFourDigits());
+                payment.setAuthorizationCode(statusResponse.getAuthorizationCode());
+                payment.setLastFourDigits(statusResponse.getLastFourDigits());
                 paymentRepository.save(payment);
 
                 //Actualizar venta

@@ -26,40 +26,31 @@ import com.erikjarquin.compras.service.CashRegisterService;
 
 /**
  * Implementación de la caja registradora.
- *
- * <p><b>El modelo V4 separa dos cosas que V3 confundía en una sola tabla.</b>
  * Un negocio tiene POCAS cajas físicas (CAJA 1, CAJA 2) y MUCHOS turnos. Antes
  * cada fila de {@code cash_registers} era "una caja", y como su número era
  * UNIQUE, la segunda vez que se abría "CAJA 1" daba 409: ese día no había forma
  * de volver a abrir la caja que sí existía.
  *
- * <p>La solución son dos tablas:
- * <ul>
- *   <li>{@code cash_boxes} ({@link CashBoxEntity}): las cajas FÍSICAS. Pocas
- *       filas, cambian poco. Es la lista que el cajero elige al abrir.</li>
- *   <li>{@code cash_registers} ({@link CashRegisterEntity}): las SESIONES. Una
- *       fila por cada apertura y cierre. Crece todos los días y guarda el corte
- *       congelado (qué se vendió, cuánto había, cuánto se contó).</li>
- * </ul>
+ * La solución son dos tablas:
+ *   {@code cash_boxes} ({@link CashBoxEntity}): las cajas FÍSICAS. Pocas
+ *   filas, cambian poco. Es la lista que el cajero elige al abrir.
+ *   {@code cash_registers} ({@link CashRegisterEntity}): las SESIONES. Una
+ *   fila por cada apertura y cierre. Crece todos los días y guarda el corte
+ *   congelado (qué se vendió, cuánto había, cuánto se contó).
  * Una caja puede tener muchas sesiones. Es el caso normal, no la excepción.
  *
- * <p>Reglas que se siguen respetando:
- * <ul>
- *   <li>Una sola caja abierta a la vez (409 si ya hay). Dos cajas abiertas al
- *       mismo tiempo harían imposible saber a cuál pertenece cada venta.</li>
- *   <li>El fondo inicial mínimo es 100 y nunca negativo.</li>
- *   <li>El cierre exige cuadrar el efectivo, con salida de emergencia que pide
- *       un motivo.</li>
- *   <li>Una caja con cortes nunca se borra: se da de baja. Ver
- *       {@link #desactiveBox(Long)}.</li>
- * </ul>
+ * Reglas que se siguen respetando:
+ *  Una sola caja abierta a la vez (409 si ya hay). Dos cajas abiertas al
+ *    mismo tiempo harían imposible saber a cuál pertenece cada venta.
+ *  El fondo inicial mínimo es 100 y nunca negativo.
+ *  El cierre exige cuadrar el efectivo, con salida de emergencia que pide
+ *    un motivo.
+ * Una caja con cortes nunca se borra: se da de baja.
  */
 @Service
 public class CashRegisterImpl implements CashRegisterService {
 
     /**
-     * Fondo mínimo con el que se puede abrir una caja (decisión del dueño).
-     *
      * Además de sentido practical (una caja con 0 no alcanza ni para una
      * venta), evita que un forgot del campo se guarde como 0 y/contamine el
      * "esperado" del corte sin que nadie lo note.
@@ -97,11 +88,11 @@ public class CashRegisterImpl implements CashRegisterService {
     // =========================================================================
 
     /**
-     * Abre un turno con una caja física ya registrada (V4).
+     * Abre un turno con una caja física ya registrada.
      *
      * La fila de {@code cash_registers}
      * era la caja, y como su número era UNIQUE no se podía volver a abrir.
-     * Ahora el modelo separa dos conceptos que V3 confundía en una sola tabla:
+     * Ahora el modelo separa dos conceptos que se confundían en una sola tabla:
      *   {@code cash_boxes}: las cajas FÍSICAS del local. Pocas filas.
      *   {@code cash_registers}: las SESIONES. Una fila por cada apertura y
      *       cierre. Crece todos los días.
@@ -143,8 +134,9 @@ public class CashRegisterImpl implements CashRegisterService {
         // propio dinero contado y su propia diferencia. Por eso se crea un
         // CashRegisterEntity nuevo en vez de actualizar el anterior.
         CashRegisterEntity sesion = new CashRegisterEntity();
-        sesion.setNumber(number);          // copia historica del numero
-        sesion.setCashBox(caja);           // a que caja fisica pertenece
+        sesion.setNumber(number); // copia historica del numero
+        sesion.setCashBox(caja); // a que caja fisica pertenece
+
         // IMPORTANTE: los acumulados NACEN en cero. El fondo inicial NO es una
         // venta: va en openingAmount, y expectedAmount = openingAmount + cashSales.
         // Si se sembrara cashSales con el fondo, el "esperado" del corte contaria
@@ -369,10 +361,6 @@ public class CashRegisterImpl implements CashRegisterService {
     /**
      * BORRA una caja, pero solo si nunca se abrió. Si ya tuvo turnos, da 409.
      *
-     * Esta es la contraparte de {@link #desactiveBox(Long)} y implementa
-     * exactamente la regla del dueño: lo que ya tuvo corte de caja no se
-     * borra, se da de baja.
-     *
      * Por qué el borrado físico es aceptable SOLO en este caso: una caja que
      * nunca se abrió no tiene sesiones, y las sesiones son las que apuntan a las
      * ventas. Sin sesiones no hay nada que romperse, así que borrarla es
@@ -437,7 +425,7 @@ public class CashRegisterImpl implements CashRegisterService {
     }
 
     /**
-     * Caja física → DTO, enriquecida con cuántos turnos tiene y si está en uso.
+     * Caja física -> DTO, enriquecida con cuántos turnos tiene y si está en uso.
      *
      * El conteo se hace con una consulta por caja. Son pocas cajas (dos o
      * tres), así que el N+1 es irrelevante y el código queda legible.
@@ -474,7 +462,7 @@ public class CashRegisterImpl implements CashRegisterService {
      * contar, o un cliente entregó un billete falso y le dio mal el cambio, el
      * turno quedaría encerrado y no se podría cerrar hasta que alguien investigue.
      * Por eso existe {@code differenceReason}: si el cajero está seguro del monto
-     * que cuenta, escribe por qué no cuadra y el cierre proceeds. La diferencia y
+     * que cuenta, escribe por qué no cuadra y el cierre procede. La diferencia y
      * su motivo quedan guardados juntos, y con eso el descuadre deja de ser
      * invisible.
      */
@@ -560,7 +548,7 @@ public class CashRegisterImpl implements CashRegisterService {
     }
 
     /**
-     * Normaliza el número de caja: recorta y apitaliza.
+     * Normaliza el número de caja: recorta y capitaliza.
      *
      * Se capitaliza a propósito: "caja 1" y "CAJA 1" son la MISMA caja y
      * deben ser el mismo número. Sin esto el UNIQUE de PostgreSQL los dejaría
@@ -596,7 +584,7 @@ public class CashRegisterImpl implements CashRegisterService {
      * sugeriría un número que una caja existente ya tiene y el alta fallaría
      * con 409.
      *
-     * <p>Solo sugiere: si el número ya existe, {@link #createBox} lo rechaza con
+     * Solo sugiere: si el número ya existe, {@link #createBox} lo rechaza con
      * 409 en vez de fallar en silencio.
      */
     @Override
@@ -647,7 +635,7 @@ public class CashRegisterImpl implements CashRegisterService {
                 .toList();
     }
 
-    //Detalle de una caja concreta por su número (V3)
+    //Detalle de una caja concreta por su número.
     @Override
     @Transactional(readOnly = true)
     public CashResponse getByNumber(String number){

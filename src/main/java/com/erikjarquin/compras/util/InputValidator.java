@@ -84,10 +84,7 @@ public final class InputValidator {
 
     /**
      * Valida el SKU. Obligatorio.
-     *
-     * Cambia una decisión anterior. El SKU era
-     * opcional: si venía vacío devolvía {@code null} y la columna lo
-     * admitía. Se cambió a obligatorio por dos razones:
+     *Obligatorio por dos razones:
      *
      *   Un producto sin SKU no se puede localizar ni integrar. El SKU es la
      *       clave con la que el negocio habla del producto; si falta, el
@@ -179,7 +176,7 @@ public final class InputValidator {
     /**
      * Valida un entero no negativo (stock, cantidad).
      *
-     * Tres reglas que vienen de errores de captura reales:
+     * Tres reglas que vienen de errores reales:
      * 
      *   Nada de decimales. No existe 1.6 de jabón: se mide en piezas o
      *       en kilos, no en 1.6 unidades. El campo de stock es entero; para peso
@@ -330,7 +327,7 @@ public final class InputValidator {
      * {@code null}, y quien lo use TIENE que comprobarlo aparte. Es la razón de
      * que existiera {@link #requerido}: tres servicios (categoría, rol y
      * proveedor) acaban de escribir su propio {@code if (x == null) throw}, y
-     * el de usuario se olvidó, que es exactamente el bug que se corrigió en V7.
+     * el de usuario se olvidó, que es exactamente el bug que se corrigió.
      */
    public static String texto(String valor, String campo, int max){
     String limpio = valor == null ? null : valor.trim();
@@ -368,7 +365,6 @@ public final class InputValidator {
      *
      * El mensaje dice QUÉ campo está mal y no "validation failed", que es la
      * razón de que esta clase exista en vez de anotaciones de Bean Validation
-     * (ver el comentario de la cabecera de la clase).
      *
      * Para campos femeninos usa {@link #requerida}, que dice "La
      * contraseña es obligatoria" en vez de "El contraseña es obligatorio".
@@ -390,9 +386,7 @@ public final class InputValidator {
      * Existe como método aparte y no como un parámetro {@code boolean} porque
      * en la llamada {@link #requerida}(p, "contraseña") se lee solo, mientras
      * que {@code requerido(p, "contraseña", true)} deja adivinar qué significa
-     * ese {@code true}. El mensaje es lo que ve el usuario final, y "La
-     * contraseña es obligatoria" es la diferencia entre que parezca un sistema
-     * cuidado y uno hecho a prisas.
+     * ese {@code true}.
      */
     public static String requerida(String valor, String campo){
         return exigir(valor, campo, "La", "obligatoria");
@@ -452,7 +446,7 @@ public final class InputValidator {
     if (tel == null || tel.isEmpty()) return null;
 
     if (!tel.matches("^[0-9\\s()+-]+$")) {
-        throw new IllegalArgumentException("El teléfono solo admite números, espacios, guions y paréntesis");
+        throw new IllegalArgumentException("El teléfono solo admite números, espacios, guiones y paréntesis");
     }
 
     return tel;

@@ -7,13 +7,12 @@ package com.erikjarquin.compras.service;
  * Contrato/interfaz para el envío de correos electrónicos.
  * EmailService -> SMTP(app.mail.provider=smtp, valor por defecto)
  * ResendEmailSender -> HTTPS(app.mail.provider=resend)
- * SMTP y API HTTPS son dos transportes distintos (puertos 587 vc 443). Quié llama a AuthImpl
+ * SMTP y API HTTPS son dos transportes distintos (puertos 587 vs 443). Quién llama a AuthImpl
  * no debe saber cuál está activo, solo hay qu enviar el correo. Esto ayuda a probar con MOCk
  * 
  * EmailService esta ocupado por la clase concreta de SMTP
  */
 public interface EmailSender {
     /**Envía el enlace de recuperación de contraseña al destinatario */
-
     void sendPasswordRecoveryEmail(String recipient, String link);
 }

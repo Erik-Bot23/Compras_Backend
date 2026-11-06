@@ -8,7 +8,6 @@ import com.erikjarquin.compras.model.dto.User.UserDto;
 
 /**
  * Contrato de operaciones sobre usuarios del sistema (CRUD + activación).
- * Ver implementación en {@code service/impl/UserImpl}.
  */
 public interface UserService {
     List<UserDto> getAllUsers();

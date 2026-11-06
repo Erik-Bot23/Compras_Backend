@@ -7,7 +7,6 @@ import com.erikjarquin.compras.model.dto.ResetPassword.ChangePasswordRequest;
 /**
  * Contrato de autenticación: login (emite JWT), recuperación de contraseña
  * (forgot/reset) y cambio de contraseña autenticado.
- * Ver {@code service/impl/AuthImpl}.
  */
 public interface AuthService {
     LoginResponse login(LoginRequest request);

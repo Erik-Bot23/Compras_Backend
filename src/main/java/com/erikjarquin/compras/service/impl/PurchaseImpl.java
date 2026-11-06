@@ -1,6 +1,8 @@
 package com.erikjarquin.compras.service.impl;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -27,8 +29,7 @@ import com.erikjarquin.compras.service.PurchaseService;
  *
  * Registrar ({@code create}): valida proveedor e items (400/409), arma
  * cabecera + detalles con subtotales y calcula el total. NO toca el
- * inventario: la compra nace PENDIENTE. Desde V3 el efecto en el almacén
- * vive en {@link #confirm(Long)}, no aquí.
+ * inventario: la compra nace PENDIENTE.
  *
  * Confirmar ({@code confirm}): es la operación que SUMA el stock de
  * cada producto y guarda su costo real. A partir de ahí la compra queda
@@ -36,8 +37,7 @@ import com.erikjarquin.compras.service.PurchaseService;
  *
  * Cancelar ({@code cancel}): solo borra la compra, y solo si sigue
  * PENDIENTE. Como una compra pendiente nunca tocó el inventario, no hay nada
- * que revertir y el antiguo {@code Math.max(stock - qty, 0)} que escribía un
- * 0 falso en la BD y devolvía 200 OK ya no tiene dónde aparecer.
+ * que revertir.
  *
  * Por qué el efecto está en confirmar y no en crear: confirmar es lo
  * que declara que la mercancía llegó de verdad al almacén. Una compra en
@@ -63,7 +63,7 @@ public class PurchaseImpl implements PurchaseService {
         this.productRepository = productRepository;
     }
 
-    //Registrar una compra. Nace PENDIENTE: no suma stock ni cambia costo (V3).
+    //Registrar una compra. Nace PENDIENTE: no suma stock ni cambia costo.
     @Override
     @Transactional
     public PurchaseDTO create(PurchaseRequest request){
@@ -75,7 +75,7 @@ public class PurchaseImpl implements PurchaseService {
         PurchaseEntity purchase = new PurchaseEntity();
         purchase.setPurchaseDate(request.getPurchaseDate() != null
                 ? request.getPurchaseDate()
-                : java.time.LocalDateTime.now());
+                : LocalDateTime.now());
         purchase.setProvider(provider);
 
         BigDecimal total = BigDecimal.ZERO;
@@ -89,19 +89,19 @@ public class PurchaseImpl implements PurchaseService {
 
             BigDecimal unitCost = item.getUnitCost() != null ? item.getUnitCost() : BigDecimal.ZERO;
 
-            //1) Renglón de compra con su subtotal (unitCost se copia del request)
+            //1) Renglón de compra con su subtotal(unitCost se copia del request)
             PurchaseDetailEntity detail = new PurchaseDetailEntity();
             detail.setPurchase(purchase);
             detail.setProduct(product);
             detail.setQuantity(item.getQuantity());
             detail.setUnitCost(unitCost);
 
-            //Precio de VENTA del renglón. Se guarda AHORA (al registrar), no
+            //Precio de VENTA del renglón. Se guarda AHORA(al registrar), no
             //al confirmar, para que la compra pendiente ya muestre el precio que
             //se aplicará. Sigue sin tocar product.price: eso pasa al confirmar.
             detail.setUnitPrice(item.getUnitPrice());
 
-            detail.setSubtotal(unitCost.multiply(BigDecimal.valueOf(item.getQuantity())).setScale(2, java.math.RoundingMode.HALF_UP));
+            detail.setSubtotal(unitCost.multiply(BigDecimal.valueOf(item.getQuantity())).setScale(2, RoundingMode.HALF_UP));
 
             total = total.add(detail.getSubtotal());
 
@@ -114,13 +114,13 @@ public class PurchaseImpl implements PurchaseService {
             details.add(detail);
         }
 
-        purchase.setTotal(total.setScale(2, java.math.RoundingMode.HALF_UP));
+        purchase.setTotal(total.setScale(2, RoundingMode.HALF_UP));
         purchase.setDetails(details);
 
         return PurchaseMapper.toDto(purchaseRepository.save(purchase));
     }
 
-    //Listar todas las compras (EntityGraph precarga proveedor y productos)
+    //Listar todas las compras(EntityGraph precarga proveedor y productos)
     @Override
     @Transactional(readOnly = true)
     public List<PurchaseDTO> getAll(){
@@ -164,12 +164,6 @@ public class PurchaseImpl implements PurchaseService {
      * vendidas, y devolvía 200 OK. La defensa era validar renglón por renglón y
      * abortar con 409 sin escribir nada.
      *
-     * Desde V3 esa situación no es representable: mientras la compra
-     * está pendiente nunca tocó el inventario, así que borrarla no deja nada que
-     * revertir. El {@code Math.max} ya no tiene dónde aparecer porque el bug
-     * que lo motivaba está estructuralmente eliminado, no escondido detrás de
-     * una validación.
-     *
      * Una compra CONFIRMADA ya suma stock y define el costo vigente, y es
      * evidencia contable de una entrega real: se rechaza con
      * 409 CONFLICT y no se borra, igual que una venta confirmada.
@@ -210,15 +204,14 @@ public class PurchaseImpl implements PurchaseService {
      * confirmar?"). Lo que no se puede es sumar dos veces, y el
      * {@code if(!purchase.isConfirmed())} lo garantiza: la segunda pasada
      * entra, ve que ya está confirmada y no toca ningún stock. Es el mismo
-     * criterio que {@code confirm()} de la venta en V2.
+     * criterio que {@code confirm()} de la venta.
      *
      * Debilidad conocida: dos peticiones simultáneas podrían pasar
      * ambas el {@code if} y devolver el stock dos veces, porque aquí no hay
      * bloqueo pesimista. El arreglo futuro es
      * {@code @Lock(PESSIMISTIC_WRITE)} sobre la lectura de la compra (o un
      * {@code UPDATE ... WHERE confirmed = false} que devuelva las filas
-     * afectadas y sirva de candado atómico). Está anotado como pendiente en
-     * AGENTS.md, igual que para las ventas.
+     * afectadas y sirva de candado atómico).
      */
     @Override
     @Transactional
@@ -226,7 +219,7 @@ public class PurchaseImpl implements PurchaseService {
         //Un solo timestamp para la BD y para la entidad en memoria: si se sacara
         //en dos momentos distintos, el confirmedAt que se guardó y el que ve el
         //usuario podrían diferir en milisegundos y no coincidir con el histórico.
-        java.time.LocalDateTime cuando = java.time.LocalDateTime.now();
+        LocalDateTime cuando = LocalDateTime.now();
 
         // ===== PASO 1: ganar la carrera, de forma atómica =====
         //
@@ -235,7 +228,7 @@ public class PurchaseImpl implements PurchaseService {
         //adelantó. Es atómico: la condición (confirmed = false) y la escritura
         //(confirmed = true) se evalúan juntas, así que dos peticiones simultáneas no
         //pueden pasar las dos.
-        //
+        
         //Va ANTES de tocar stock y NO con un simple if(entity.isConfirmed()) porque
         //ese if lee la fila y decide en Java: con dos peticiones simultaneas las
         //dos leen false antes de que ninguna escriba, y las dos suman el stock.
@@ -250,10 +243,9 @@ public class PurchaseImpl implements PurchaseService {
         }
 
         //Esta petición ganó la carrera: ahora sí se aplica el inventario.
-        //
         //Se refleja el UPDATE sobre la entidad en memoria para devolver un DTO
         //correcto. Sin esto habría que volver a leer de la base, y esa segunda
-        //lectura es un gasto evitable: el repositorio ya-nos dijo que esta
+        //lectura es un gasto evitable: el repositorio ya nos dijo que esta
         //petición ganó, así que el estado final es conocido sin volver a preguntar.
         PurchaseEntity purchase = purchaseRepository.findDetailedById(id)
                 .orElseThrow(() -> new PurchaseException("Compra no encontrada", HttpStatus.NOT_FOUND));
@@ -272,17 +264,11 @@ public class PurchaseImpl implements PurchaseService {
 
                 //2) COSTO: lo que se le PAGA al proveedor. Solo este módulo lo
                 //   escribe, porque solo él sabe lo que se pagó. Alimenta
-                //   `GET /api/local/reports/margins` (margen = price - cost) y,
-                //   desde V3, la utilidad de cada venta via sale_details.unitCost.
+                //   `GET /api/local/reports/margins` (margen = price - cost).
                 product.setCost(detail.getUnitCost());
 
                 //3) PRECIO DE VENTA: CONFIRMAR también
-                //   actualiza product.price con lo que dice el renglón. Hasta V2
-                //   este módulo NUNCA escribía price, porque se consideraba
-                //   "decisión comercial"; el dueño aclaró el flujo real: al crear
-                //   el producto da su precio, y al reponer stock escribe el
-                //   precio de venta de ese lote (puede ser el mismo o subirse).
-                //
+                //   actualiza product.price con lo que dice el renglón.
                 //   NULL = "esta compra no opina sobre el precio": se deja el que
                 //   ya tiene. Por eso el campo es nullable y opcional, y no un 0
                 //   (un 0 dejaría el producto gratis).

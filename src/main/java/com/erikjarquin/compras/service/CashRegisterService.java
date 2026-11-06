@@ -20,12 +20,6 @@ import com.erikjarquin.compras.model.dto.Cash.OpenCashRequest;
  * con {@link #desactiveBox}, nunca se borran.
  * {@code cash_registers}: los TURNOS. Se crean con {@link #open} y se
  * cierran con {@link #close}. Una misma caja puede tener muchos.
- *
- * Antes estas dos ideas vivían en una sola tabla y por eso una caja se
- * podía abrir una sola vez: su número era UNIQUE. Ese error de modelo es
- * precisely lo que V4 corrige.
- *
- * @see com.erikjarquin.compras.service.impl.CashRegisterImpl
  */
 public interface CashRegisterService {
 

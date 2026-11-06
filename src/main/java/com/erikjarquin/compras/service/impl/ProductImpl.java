@@ -28,7 +28,7 @@ import com.erikjarquin.compras.service.ProductService;
  * {@code app.upload-url}/{archivo} para que el frontend la use en <img>.
  *
  * Los errores de "no encontrado" o categoría inválida se lanzan como
- * IllegalArgumentException → el GlobalExceptionHandler responde 400 (no 500).
+ * IllegalArgumentException -> el GlobalExceptionHandler responde 400 (no 500).
  */
 @Service
 public class ProductImpl implements ProductService {
@@ -153,7 +153,7 @@ public class ProductImpl implements ProductService {
         repository.deleteById(id);
     }
 
-    //Dar de baja un producto (borrado lógico): no borra la fila ni la imagen
+    //Dar de baja un producto(borrado lógico): no borra la fila ni la imagen
     @Override
     public ProductDto deactivate(Long id){
         ProductEntity entity = repository.findById(id).orElseThrow(() ->
@@ -201,7 +201,7 @@ public class ProductImpl implements ProductService {
         return productMapper.toDto(product);
     }
 
-    //Buscador de productos (el repositorio ya excluye los dados de baja)
+    //Buscador de productos(el repositorio ya excluye los dados de baja)
     @Override
     public List<ProductDto> search(String q){
         return repository.search(q).stream().map(productMapper::toDto).collect(Collectors.toList());

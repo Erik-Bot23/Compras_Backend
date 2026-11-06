@@ -55,8 +55,8 @@ public class AuthImpl implements AuthService {
     public LoginResponse login(LoginRequest request){
 
         return repo.findByEmailWithRoleAndPermissions(request.getEmail())
-                .filter(UserEntity::isActive) //
-                .filter(user -> passwordEncoder.matches( //
+                .filter(UserEntity::isActive) 
+                .filter(user -> passwordEncoder.matches( 
                     request.getPassword(),
                     user.getPassword()))
                 .map(user -> {
@@ -93,7 +93,7 @@ public class AuthImpl implements AuthService {
         UserEntity user = repo.findByEmail(email).orElseThrow(() ->
             new UserException("No existe una cuenta registrada con ese correo electrónico."));
 
-        String token = UUID.randomUUID().toString(); //
+        String token = UUID.randomUUID().toString(); 
 
         user.setResetToken(token);
         user.setResetTokenExpiration(LocalDateTime.now().plusHours(1));
@@ -103,7 +103,6 @@ public class AuthImpl implements AuthService {
         String link = frontendUrl + "/reset-password?token=" + token;
 
         emailService.sendPasswordRecoveryEmail(user.getEmail(), link);
-
     }
 
     //Resetear contraseña
@@ -112,7 +111,6 @@ public class AuthImpl implements AuthService {
         UserEntity user = repo.findByResetToken(token).orElseThrow(() ->
             new UserException("Token inválido", HttpStatus.BAD_REQUEST));
 
-        //isBefore
         if(user.getResetTokenExpiration().isBefore(LocalDateTime.now())){
             throw new UserException("Token expirado", HttpStatus.BAD_REQUEST);
         }
@@ -133,7 +131,6 @@ public class AuthImpl implements AuthService {
             throw new UserException("Contraseña actual incorrecta", HttpStatus.BAD_REQUEST);
         }
 
-        //encode
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
 
         repo.save(user);

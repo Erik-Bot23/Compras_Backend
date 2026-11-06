@@ -39,7 +39,7 @@ public class CategoryImpl implements CategoryService {
                 .collect(Collectors.toList()); //collect: 
     }
 
-    //Guaradar la nueva categoría
+    //Guardar la nueva categoría
     @Override
     public CategoryDto save(CategoryDto dto){
         dto.setName(InputValidator.texto(dto.getName(), "nombre de la categoria",50));

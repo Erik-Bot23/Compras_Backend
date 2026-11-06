@@ -54,7 +54,7 @@ import com.erikjarquin.compras.service.ReportsService;
  * fila con {@code cancelled = true} a propósito, es evidencia contable pero
  * NO cambia el {@code paymentStatus}, que sigue en APPROVED. Filtrar solo por
  * APPROVED hacía que una venta anulada siguiera sumando ingresos; con la
- * utilidad nueva también habría summedo costo. Por eso las consultas de
+ * utilidad nueva también habría sumqdo costo. Por eso las consultas de
  * {@link SaleRepository} llevan las dos condiciones.
  */
 @Service
@@ -169,7 +169,7 @@ public class ReportsImpl implements ReportsService {
                 .toList();
     }
 
-    //Márgenes por producto: cost (último costo real de compras) vs price.
+    //Márgenes por producto: cost(último costo real de compras) vs price.
     //Se ordenan de MENOR a MAYOR margen: primero los que conviene renegociar.
     @Override
     @Transactional(readOnly = true)
@@ -180,7 +180,7 @@ public class ReportsImpl implements ReportsService {
                     BigDecimal price = product.getPrice() != null ? product.getPrice() : BigDecimal.ZERO;
                     BigDecimal margin = price.subtract(cost).setScale(2, RoundingMode.HALF_UP);
 
-                    //%= margin/price*100; si no hay precio de venta no se puede calcular
+                    //% = margin/price*100; si no hay precio de venta no se puede calcular
                     BigDecimal marginPercent = price.signum() > 0
                             ? margin.multiply(BigDecimal.valueOf(100))
                                     .divide(price, 2, RoundingMode.HALF_UP)
@@ -348,7 +348,7 @@ public class ReportsImpl implements ReportsService {
      * Por qué el filtro se aplica en Java y no en SQL. Una caja tiene
      * pocos turnos (dos o tres cajas, un turno diario cada una), así que el
      * conjunto es chico y se puede filtrar en memoria sin penalizar. A cambio,
-     * una sola pasada de código calcula ventas, por-usuario, utilidad y el
+     * una sola pasada de código calcula ventas, por usuario, utilidad y el
      * agrupado por vendedor. Hacerlo en SQL serían cuatro consultas
      * distintas y luego reconciliarlas en Java, que es justo donde se
      * esconden los bugs.
@@ -371,7 +371,7 @@ public class ReportsImpl implements ReportsService {
         boolean filtrado = from != null || to != null || userId != null;
 
         LocalDate start = from;
-        //El filtro de fecha se aplica sobre openedAt (inicio del turno) y no sobre
+        //El filtro de fecha se aplica sobre openedAt(inicio del turno) y no sobre
         //closedAt: un turno abierto a las 11pm y cerrado a las 2am cae en el dia
         //que se ABRIO, que es como el cajero lo recuerda.
         LocalDate fin = to == null ? null : to.plusDays(1);
@@ -482,7 +482,7 @@ public class ReportsImpl implements ReportsService {
 
         if(sinUsuarioTickets > 0){
             vendedores.add(new CashBoxReportDTO.CashSessionSellerDTO(
-                    null, "Sin usuario (ventas anteriores a V5)"));
+                    null, "Sin usuario (ventas anteriores)"));
             //El agrupado real se hizo arriba; aquí solo se arma el DTO.
             CashBoxReportDTO.CashSessionSellerDTO sinUsuarioDto =
                     vendedores.get(vendedores.size() - 1);

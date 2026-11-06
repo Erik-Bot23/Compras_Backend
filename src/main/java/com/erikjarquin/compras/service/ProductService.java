@@ -10,13 +10,13 @@ import com.erikjarquin.compras.model.dto.Products.ProductDto;
 /**
  * Contrato del catálogo de productos (CRUD, filtro, búsquedas).
  * Las operaciones de alta/edición reciben la imagen como MultipartFile y la
- * guardan mediante FileStorageService. Ver {@code service/impl/ProductImpl}.
+ * guardan mediante FileStorageService.
  */
 public interface ProductService {
     //Listar todos los productos
     List<ProductDto> getAll();
     //Filtrar por categoría
-    List<ProductDto> getByCategory(String category); //¿Long categoryId?
+    List<ProductDto> getByCategory(String category); 
     
     //Guardar producto
     ProductDto save(
